@@ -6,6 +6,8 @@ different architecture, please adapt the commands accordingly.
 
 ## Building the Example :wrench:
 
+NOTE: In CMakeList.txt, you need to check and change paths accordingly.
+
 To build this example, first run CMake to generate the corresponding build
 files. We recommend you use a separate directory to store all the generated
 files (e.g., ./build).
@@ -53,8 +55,6 @@ export RTI_LD_LIBRARY_PATH=$NDDSHOME/lib/<ARCH>
 
 where `<ARCH>` shall be replaced with the target architecture you used to build
 the example in the previous step.
-
-In CMakeList.txt, you might need to check and change paths accordingly.
 
 ### MonitorProcessor
 
