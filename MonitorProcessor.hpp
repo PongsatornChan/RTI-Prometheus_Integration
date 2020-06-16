@@ -65,8 +65,8 @@ private:
     prometheus::Family<prometheus::Counter>& counter_family;
     prometheus::Counter& second_counter;
     prometheus::Family<prometheus::Gauge>& gauge_family;
-    prometheus::Gauge& current_pushed_samples;
-    prometheus::Gauge& current_pushed_bytes;
+    prometheus::Gauge& user_cpu_time;
+    prometheus::Gauge& kernel_cpu_time;
 };
 
 class MonitorProcessorPlugin : public rti::routing::processor::ProcessorPlugin {

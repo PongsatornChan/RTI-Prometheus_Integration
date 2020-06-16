@@ -56,14 +56,14 @@ MonitorExposer::MonitorExposer() :
         second_counter (counter_family.Add(
                 {{"label1", "value1"}})),
         gauge_family (BuildGauge()
-                .Name("data_writer_status")
+                .Name("domainParticipant_process_statistics")
                 .Help("Tell the current position of the squre shape")
                 .Labels({{"job", "RTI_Shape"}})
                 .Register(*registry)),
-        current_pushed_samples (gauge_family.Add(
-                {{"Count", "samples"}})),
-        current_pushed_bytes (gauge_family.Add(
-                {{"Count", "bytes"}}))
+        user_cpu_time (gauge_family.Add(
+                {{"process", "user_cpu_time"}})),
+        kernel_cpu_time (gauge_family.Add(
+                {{"process", "kernel_cpu_time"}}))
 
 {
         exposer.RegisterCollectable(registry);
@@ -98,31 +98,35 @@ void MonitorExposer::on_data_available(rti::routing::processor::Route &route)
     auto input_samples = route.input<DynamicData>(0).take();
     for (auto sample : input_samples) {
         if (sample.info().valid()) { // what valid?
-            // set x and y data for prometheus
             output_data_ = sample.data();
 
             /****************************************
             How to get value from pushed_sample_count
-            datawriter_protocol_status: 
-                status: 
-                        pushed_sample_count: 174
+            process: 
+                user_cpu_time: 
+                        sec: 351
+                        nanosec: 764159998
             *****************************************/
 
-           std::cout << typeid(output_data_).name() << '\n';
-           std::cout << typeid(sample.data()).name() << '\n';
-           std::cout << "----------------------" << '\n';
-        //     double var = (double) output_data_.get()
-        //         .value<int32_t>("datawriter_protocol_status");
-        //     x_gauge.Set(var);
-        //     var = (double) output_data_.get().value<int32_t>("y");
-        //     y_gauge.Set(var);
+           double var = (double) output_data_.get().value<DynamicData>("process")
+                .value<DynamicData>("user_cpu_time")
+                .value<int64_t>("sec");
+           user_cpu_time.Set(var);
+           var = (double) output_data_.get().value<DynamicData>("process")
+                .value<DynamicData>("kernel_cpu_time")
+                .value<int64_t>("sec");
+           kernel_cpu_time.Set(var);
         } else {
             // set x and y data for prometheus
             output_data_ = sample.data();
-        //     double var = output_data_.get().value<double>("y");
-        //     x_gauge.Set(var);
-        //     var = output_data_.get().value<double>("x");
-        //     y_gauge.Set(var);
+            double var = (double) output_data_.get().value<DynamicData>("process")
+                .value<DynamicData>("user_cpu_time")
+                .value<int64_t>("sec");
+            user_cpu_time.Set(var);
+            var = (double) output_data_.get().value<DynamicData>("process")
+                .value<DynamicData>("kernel_cpu_time")
+                .value<int64_t>("sec");
+            kernel_cpu_time.Set(var);
         }
     }
 }

@@ -55,10 +55,10 @@
             <session>
                 <topic_route name="MonitoringTopicToMetric">
                     <processor plugin_name="MonitorPluginLib::MonitorProcessor"/>
-                    <input name="dataWriterStatistics" participant="domain0">
-                        <topic_name>rti/dds/monitoring/dataWriterEntityMatchedSubscriptionStatistics</topic_name>
-                        <registered_type_name>DataWriterEntityMatchedSubscriptionStatistics</registered_type_name>
-                        <creation_mode>ON_DOMAIN_MATCH</creation_mode>
+                    <input name="MonitoringTopic" participant="domain0">
+                        <topic_name>rti/dds/monitoring/domainParticipantEntityStatistics</topic_name>
+                        <registered_type_name>rti::dds::monitoring::DomainParticipantEntityStatistics</registered_type_name>
+                        <creation_mode>IMMEDIATE</creation_mode>
                     </input> 
                     <!-- <input name="Square" participant="domain0">
                         <registered_type_name>ShapeType</registered_type_name>
