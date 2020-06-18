@@ -40,9 +40,7 @@
 
 using namespace prometheus;
 
-/*
-* Library from Yaml C++
-*/
+#include "Mapper.hpp"
 
 
 class MonitorExposer : public rti::routing::processor::NoOpProcessor {
@@ -74,6 +72,9 @@ private:
 
     // Yaml filename
     std::string filename;
+
+    // Mapper that handle mapping topic to matric and register it
+    Mapper mapper;
 };
 
 class MonitorProcessorPlugin : public rti::routing::processor::ProcessorPlugin {

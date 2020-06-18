@@ -30,8 +30,12 @@
 #include <prometheus/exposer.h>
 #include <prometheus/registry.h>
 
+#include "yaml-cpp/yaml.h"
+
 #include "MonitorProcessor.hpp"
 
+// #include "Mapper.hpp"
+#include "Mapper.cxx"
 
 using namespace rti::routing;
 using namespace rti::routing::processor;
@@ -48,6 +52,10 @@ using namespace prometheus;
 prometheus::Exposer exposer{"127.0.0.1:8080", 1};
 std::shared_ptr<Registry> registry = std::make_shared<Registry>();
 
+/* 
+*  initalize all the family and metrics 
+*  These would be handle by MAPPER in the future 
+*/
 MonitorExposer::MonitorExposer(std::string inputFilename) : 
         counter_family (BuildCounter()
                 .Name("call_on_data_available_total")
@@ -64,7 +72,8 @@ MonitorExposer::MonitorExposer(std::string inputFilename) :
         user_cpu_time (gauge_family.Add(
                 {{"process", "user_cpu_time"}})),
         kernel_cpu_time (gauge_family.Add(
-                {{"process", "kernel_cpu_time"}}))
+                {{"process", "kernel_cpu_time"}})),
+        mapper (Mapper(inputFilename))
 
 {
         exposer.RegisterCollectable(registry);
