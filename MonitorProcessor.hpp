@@ -51,7 +51,9 @@ public:
             rti::routing::processor::Route &route,
             rti::routing::processor::Input &input) override;
 
-    MonitorExposer(std::string inputFilename, prometheus::Exposer& inputExposer);
+    MonitorExposer(std::string inputFilename, 
+                   prometheus::Exposer& inputExposer, 
+                   std::shared_ptr<prometheus::Registry> inputRegistry);
 
     ~MonitorExposer();
 
@@ -78,6 +80,9 @@ private:
 
     // Exposer own by ProcessorPlugin which passes on to processor
     prometheus::Exposer& exposer;
+    // Registry own by ProcessorPlugin 
+    std::shared_ptr<prometheus::Registry> registry;
+
 };
 
 class MonitorProcessorPlugin : public rti::routing::processor::ProcessorPlugin {
@@ -94,8 +99,9 @@ public:
     MonitorProcessorPlugin(const rti::routing::PropertySet &properties);
 
 private:
-    // Exposer for Prometheus
+    // Exposer for Prometheus 
     prometheus::Exposer exposer;
+    std::shared_ptr<prometheus::Registry> registry;
 };
 
 
