@@ -79,6 +79,7 @@ MonitorExposer::MonitorExposer(std::string inputFilename,
         exposer (inputExposer),
         registry (inputRegistry)
 {
+        mapper.registerMetric(registry);
         exposer.RegisterCollectable(registry);
         filename = inputFilename;
         std::cout << "MonitorExposer(Processor) is created" << '\n';
