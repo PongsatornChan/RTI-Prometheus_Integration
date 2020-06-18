@@ -51,7 +51,7 @@ public:
             rti::routing::processor::Route &route,
             rti::routing::processor::Input &input) override;
 
-    MonitorExposer(std::string inputFilename);
+    MonitorExposer(std::string inputFilename, prometheus::Exposer& inputExposer);
 
     ~MonitorExposer();
 
@@ -75,6 +75,9 @@ private:
 
     // Mapper that handle mapping topic to matric and register it
     Mapper mapper;
+
+    // Exposer own by ProcessorPlugin which passes on to processor
+    prometheus::Exposer& exposer;
 };
 
 class MonitorProcessorPlugin : public rti::routing::processor::ProcessorPlugin {
@@ -89,6 +92,10 @@ public:
             rti::routing::processor::Processor *processor) override;
 
     MonitorProcessorPlugin(const rti::routing::PropertySet &properties);
+
+private:
+    // Exposer for Prometheus
+    prometheus::Exposer exposer;
 };
 
 

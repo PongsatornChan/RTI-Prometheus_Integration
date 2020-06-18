@@ -48,15 +48,16 @@ using namespace prometheus;
 /*
  * --- MonitorExposer ---------------------------------------------------------
  */
+const std::string DEFAULT_ADDRESS = "127.0.0.1:8080";
 
-prometheus::Exposer exposer{"127.0.0.1:8080", 1};
+// prometheus::Exposer exposer{DEFAULT_ADDRESS, 1};
 std::shared_ptr<Registry> registry = std::make_shared<Registry>();
 
 /* 
 *  initalize all the family and metrics 
 *  These would be handle by MAPPER in the future 
 */
-MonitorExposer::MonitorExposer(std::string inputFilename) : 
+MonitorExposer::MonitorExposer(std::string inputFilename, prometheus::Exposer& inputExposer) : 
         counter_family (BuildCounter()
                 .Name("call_on_data_available_total")
                 .Help("How many times this processor call on_data_available()")
@@ -73,7 +74,8 @@ MonitorExposer::MonitorExposer(std::string inputFilename) :
                 {{"process", "user_cpu_time"}})),
         kernel_cpu_time (gauge_family.Add(
                 {{"process", "kernel_cpu_time"}})),
-        mapper (Mapper(inputFilename))
+        mapper (Mapper(inputFilename)),
+        exposer (inputExposer)
 
 {
         exposer.RegisterCollectable(registry);
@@ -147,8 +149,9 @@ void MonitorExposer::on_data_available(rti::routing::processor::Route &route)
  * --- MonitorProcessorPlugin --------------------------------------------------
  */
 
-MonitorProcessorPlugin::MonitorProcessorPlugin(const rti::routing::PropertySet &)
-{
+MonitorProcessorPlugin::MonitorProcessorPlugin(const rti::routing::PropertySet &properties)
+: exposer {(properties.find("exposer") != properties.end() ? properties.find("exposer")->second: DEFAULT_ADDRESS) , 1}
+{       
 }
 
 
@@ -158,7 +161,7 @@ rti::routing::processor::Processor *MonitorProcessorPlugin::create_processor(
 {
     const std::string propertyName = "mapping"; 
     std::string filename = properties.find(propertyName)->second;
-    return new MonitorExposer(filename);
+    return new MonitorExposer(filename, exposer);
 }
 
 void MonitorProcessorPlugin::delete_processor(
