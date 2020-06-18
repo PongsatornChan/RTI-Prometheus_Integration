@@ -40,6 +40,10 @@
 
 using namespace prometheus;
 
+/*
+* Library from Yaml C++
+*/
+
 
 class MonitorExposer : public rti::routing::processor::NoOpProcessor {
 public:
@@ -49,7 +53,7 @@ public:
             rti::routing::processor::Route &route,
             rti::routing::processor::Input &input) override;
 
-    MonitorExposer();
+    MonitorExposer(std::string inputFilename);
 
     ~MonitorExposer();
 
@@ -67,6 +71,9 @@ private:
     prometheus::Family<prometheus::Gauge>& gauge_family;
     prometheus::Gauge& user_cpu_time;
     prometheus::Gauge& kernel_cpu_time;
+
+    // Yaml filename
+    std::string filename;
 };
 
 class MonitorProcessorPlugin : public rti::routing::processor::ProcessorPlugin {

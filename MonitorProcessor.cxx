@@ -32,6 +32,7 @@
 
 #include "MonitorProcessor.hpp"
 
+
 using namespace rti::routing;
 using namespace rti::routing::processor;
 using namespace rti::routing::adapter;
@@ -47,7 +48,7 @@ using namespace prometheus;
 prometheus::Exposer exposer{"127.0.0.1:8080", 1};
 std::shared_ptr<Registry> registry = std::make_shared<Registry>();
 
-MonitorExposer::MonitorExposer() : 
+MonitorExposer::MonitorExposer(std::string inputFilename) : 
         counter_family (BuildCounter()
                 .Name("call_on_data_available_total")
                 .Help("How many times this processor call on_data_available()")
@@ -67,7 +68,9 @@ MonitorExposer::MonitorExposer() :
 
 {
         exposer.RegisterCollectable(registry);
+        filename = inputFilename;
         std::cout << "MonitorExposer(Processor) is created" << '\n';
+        std::cout << "with mapping filename: " << filename << '\n'; 
         std::cout << "____________________________________" << '\n';
 }
 
@@ -144,7 +147,9 @@ rti::routing::processor::Processor *MonitorProcessorPlugin::create_processor(
         rti::routing::processor::Route &,
         const rti::routing::PropertySet &properties)
 {
-    return new MonitorExposer();
+    const std::string propertyName = "mapping"; 
+    std::string filename = properties.find(propertyName)->second;
+    return new MonitorExposer(filename);
 }
 
 void MonitorProcessorPlugin::delete_processor(
@@ -154,5 +159,10 @@ void MonitorProcessorPlugin::delete_processor(
     delete processor;
 }
 
+void printDebug(std::string string) {
+        std::cout << "DEBUG-------------------\n";
+        std::cout << string << '\n';
+        std::cout << "END_DEBUG---------------\n";
+}
 
 RTI_PROCESSOR_PLUGIN_CREATE_FUNCTION_DEF(MonitorProcessorPlugin);

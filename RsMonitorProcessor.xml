@@ -53,17 +53,23 @@
             </participant>
 
             <session>
+
                 <topic_route name="MonitoringTopicToMetric">
-                    <processor plugin_name="MonitorPluginLib::MonitorProcessor"/>
+                    <processor plugin_name="MonitorPluginLib::MonitorProcessor">
+                        <property>
+                            <value>
+                                <element>
+                                    <name>mapping</name>
+                                    <value>mapping.yml</value>
+                                </element>
+                            </value>
+                        </property>
+                    </processor> 
                     <input name="MonitoringTopic" participant="domain0">
                         <topic_name>rti/dds/monitoring/domainParticipantEntityStatistics</topic_name>
                         <registered_type_name>rti::dds::monitoring::DomainParticipantEntityStatistics</registered_type_name>
                         <creation_mode>IMMEDIATE</creation_mode>
                     </input> 
-                    <!-- <input name="Square" participant="domain0">
-                        <registered_type_name>ShapeType</registered_type_name>
-                        <creation_mode>ON_DOMAIN_MATCH</creation_mode>
-                    </input> -->
                 </topic_route>
 
             </session>
