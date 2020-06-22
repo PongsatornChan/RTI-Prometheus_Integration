@@ -25,6 +25,17 @@
 
 #include "yaml-cpp/yaml.h"
 
+#include <variant>
+
+#include "boost/variant.hpp"
+#include "boost/any.hpp"
+
+using namespace std;
+using namespace prometheus;
+
+typedef boost::variant<Family<Counter>, Family<Gauge>, Family<Histogram>, Family<Summary>> METRIC_VARIANT;
+
+
 class Mapper {
     public:
         Mapper(std::string configFile);
@@ -43,8 +54,14 @@ class Mapper {
         int updateMetric(dds::core::xtypes::DynamicData data);
 
     private:
-        std::string filename;
+        string filename;
         dds::core::optional<dds::core::xtypes::DynamicData> ddsData;
+
+        // problem with size of Histogram
+       // map<string, prometheus::Family<prometheus::Counter>*> metricsMap;
+       // map<string, METRIC_VARIANT &> metricsMap;
+       
+       map<string, boost::any> metricsMap;
 };
 
 #endif

@@ -55,9 +55,15 @@ set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "disable yaml tools")
 set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "disable yaml contrib")
 add_subdirectory(third-party/yaml-cpp/)
 
+# boost 
+find_package(Boost REQUIRED)
+
 # Define the library that will provide the Processor plugin
 add_library(monitorprocessor
     "${CMAKE_CURRENT_SOURCE_DIR}/MonitorProcessor.cxx")
+
+# add_library(mapper
+#     "${CMAKE_CURRENT_SOURCE_DIR}/Mapper.cxx")
 
 # Set target properties for lang requirement output library name
 set_target_properties(monitorprocessor
@@ -79,8 +85,10 @@ target_link_libraries(monitorprocessor
     RTIConnextDDS::cpp2_api
     RTIConnextDDS::routing_service_infrastructure
     prometheus-cpp::pull
-    yaml-cpp)
+    yaml-cpp
+    ${Boost_LIBRARIES})
 
 target_include_directories(monitorprocessor
     PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}")
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${Boost_INCLUDE_DIRS}")
