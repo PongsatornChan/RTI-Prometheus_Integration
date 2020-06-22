@@ -51,7 +51,7 @@ class Mapper {
         *  should pass the sample to this function to update metric 
         *  Return: 1 if success, 0 otherwise
         */
-        int updateMetric(dds::core::xtypes::DynamicData data);
+        int updateMetric(const dds::core::xtypes::DynamicData& data);
 
     private:
         string filename;

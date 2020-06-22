@@ -60,14 +60,14 @@ MonitorExposer::MonitorExposer(std::string inputFilename,
                                prometheus::Exposer& inputExposer,
                                std::shared_ptr<prometheus::Registry> inputRegistry) : 
         counter_family (BuildCounter()
-                .Name("call_on_data_available_total")
+                .Name("call_on_data_available_total1")
                 .Help("How many times this processor call on_data_available()")
                 .Labels({{"label", "value"}})
                 .Register(*inputRegistry)),
         second_counter (counter_family.Add(
                 {{"label1", "value1"}})),
         gauge_family (BuildGauge()
-                .Name("domainParticipant_process_statistics")
+                .Name("domainParticipant_process_statistics1")
                 .Help("Tell the current position of the squre shape")
                 .Labels({{"job", "RTI_Shape"}})
                 .Register(*inputRegistry)),
@@ -113,9 +113,9 @@ void MonitorExposer::on_data_available(rti::routing::processor::Route &route)
     // Split input shapes  into mono-dimensional output shapes
     auto input_samples = route.input<DynamicData>(0).take();
     for (auto sample : input_samples) {
-        if (sample.info().valid()) { // what valid?
+        mapper.updateMetric((output_data_.get()));
+        if (sample.info().valid()) { 
             output_data_ = sample.data();
-
             /****************************************
             How to get value from pushed_sample_count
             process: 

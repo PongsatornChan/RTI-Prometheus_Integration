@@ -36,14 +36,33 @@ void Mapper::registerMetric(std::shared_ptr<Registry> registry) {
     prometheus::Family<prometheus::Gauge>& gauge_family = BuildGauge()
                 .Name("domainParticipant_process_statistics")
                 .Help("Tell the current position of the squre shape")
-                .Labels({{"job", "RTI_Shape"}})
+                .Labels({{"job", "registerMetric"}})
                 .Register(*registry);
     prometheus::Gauge& user_cpu_time = gauge_family.Add({{"process", "user_cpu_time"}});
     prometheus::Gauge& kernel_cpu_time = gauge_family.Add({{"process", "kernel_cpu_time"}});
-    metricsMap["doaminParticipant_process_statistics"] = &gauge_family;
+    metricsMap["domainParticipant_process_statistics"] = &gauge_family;
 }
 
-int Mapper::updateMetric(dds::core::xtypes::DynamicData data) {
+int Mapper::updateMetric(const dds::core::xtypes::DynamicData& data) {
+    // TODO-- function for metric retrival would be nice
+    auto counter_fam = boost::any_cast<prometheus::Family<Counter>*>(metricsMap["call_on_data_available_total"]);
+    prometheus::Counter& counter = counter_fam->Add({{"processor", "1"}});
+    counter.Increment();
+
+   
+    auto gauge_fam_ptr = boost::any_cast<prometheus::Family<Gauge>*>(metricsMap["domainParticipant_process_statistics"]);
+
+    prometheus::Gauge& user_cpu_time = gauge_fam_ptr->Add({{"process", "user_cpu_time"}});
+    prometheus::Gauge& kernel_cpu_time = gauge_fam_ptr->Add({{"process", "kernel_cpu_time"}});
+    // TODO-- function for data retrival would be nice too
+    double var = (double) data.value<DynamicData>("process")
+                .value<DynamicData>("user_cpu_time")
+                .value<int64_t>("sec");
+    user_cpu_time.Set(var);
+    var = (double) data.value<DynamicData>("process")
+                .value<DynamicData>("kernel_cpu_time")
+                .value<int64_t>("sec");
+    kernel_cpu_time.Set(var);
 
     return 1;
 }
