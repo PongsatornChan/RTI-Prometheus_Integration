@@ -90,3 +90,11 @@ In CMakeList.txt, you might need to check and change paths accordingly.
     You can find call_on_data_available_total and data_writer_status, 
     which are metrics expose by our processor.
     NOTE: as of 6/10/20, You will see the value of both metrics 0. Work in progress
+
+### Libraries used
+I am learning CMake so if you faces problems involving libraries, CMake build, etc. 
+I would recommend you check out and install these libraries and edit CMakeList.txt accordingly.
+Thank you for your patient.
+1. prometheus-cpp: https://github.com/jupp0r/prometheus-cpp
+2. yaml-cpp: https://github.com/jbeder/yaml-cpp
+3. boost: https://www.boost.org/doc/libs/1_73_0/more/getting_started/unix-variants.html

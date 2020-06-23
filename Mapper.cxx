@@ -13,18 +13,29 @@
 #include <prometheus/exposer.h>
 #include <prometheus/registry.h>
 
+#include <prometheus/detail/builder.h>
+
 #include "yaml-cpp/yaml.h"
 
 #include "Mapper.hpp"
 
+using namespace std;
 using namespace dds::core::xtypes;
 using namespace prometheus;
 
+/*
+* CONFIG_FILE as path to .yml file which specify how to make metrics
+* The yml file should be in the root directory of build.
+* Note: You have to run routing service from within build dir. 
+*/
 Mapper::Mapper(std::string configFile) {
-    filename = configFile;
+    configFilename = "../";
+    configFilename.append(configFile);
 }
 
-void Mapper::registerMetric(std::shared_ptr<Registry> registry) {
+void Mapper::registerMetrics(std::shared_ptr<Registry> registry) {
+    YAML::Node config = YAML::LoadFile(configFilename);
+    
     prometheus::Family<prometheus::Counter>& counter_family = BuildCounter()
                 .Name("call_on_data_available_total")
                 .Help("How many times this processor call on_data_available()")
@@ -43,7 +54,29 @@ void Mapper::registerMetric(std::shared_ptr<Registry> registry) {
     metricsMap["domainParticipant_process_statistics"] = &gauge_family;
 }
 
-int Mapper::updateMetric(const dds::core::xtypes::DynamicData& data) {
+/*
+* Create Family (container of metrics) 
+* and register it to REGISTRY
+* Return: Family<T>* for T = Counter, Gauge, Histogram, or Summary
+* and return NULL if fail
+*/
+boost::any createFamily(metricTypes type, string name, string detail, 
+                        map<string, string>& labels, shared_ptr<Registry> registry) {
+    
+    switch(type){
+        case counter:
+            return &(BuildCounter().Name(name).Help(detail).Labels(labels).Register(*registry));
+        case gauge:
+            return &(BuildGauge().Name(name).Help(detail).Labels(labels).Register(*registry));
+        case histogram:
+            return &(BuildHistogram().Name(name).Help(detail).Labels(labels).Register(*registry));
+        case summary:
+            return &(BuildSummary().Name(name).Help(detail).Labels(labels).Register(*registry));
+    }
+    return NULL;
+}
+
+int Mapper::updateMetrics(const dds::core::xtypes::DynamicData& data) {
     // TODO-- function for metric retrival would be nice
     auto counter_fam = boost::any_cast<prometheus::Family<Counter>*>(metricsMap["call_on_data_available_total"]);
     prometheus::Counter& counter = counter_fam->Add({{"processor", "1"}});

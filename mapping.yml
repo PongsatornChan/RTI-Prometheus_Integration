@@ -1,17 +1,18 @@
----
-- domainParticipant_process_statistics: 
-  type: guage
+Family: 
+  name: "domainParticipant_process_statistics"
+  type: "Guage"
   description: "Tell cpu usage"
-  labels: [job]
-  values: ["Shape Demo monitoring topic"]
-  user_cpu_time:
-    name: "process:user_cpu_time:sec"
-    type: double
-    labels: [process]
-    values: [user_cpu_time]
-  kernel_cpu_time:
-    name: "process:kernel_cpu_time:sec"
-    type: double
-    labels: [process]
-    values: [kernel_cpu_time]
-...
+  labels: 
+    job: "Shape Demo monitoring topic"
+  metrics:
+    - user_cpu_time:
+      data: "process:user_cpu_time:sec"
+      type: double
+      labels: 
+        process: "user_cpu_time"
+    - kernel_cpu_time:
+      data: "process:kernel_cpu_time:sec"
+      type: double
+      labels: 
+        process: "kernel_cpu_time"
+

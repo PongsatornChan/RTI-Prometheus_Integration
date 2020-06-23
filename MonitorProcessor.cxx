@@ -59,27 +59,11 @@ const std::string DEFAULT_ADDRESS = "127.0.0.1:8080";
 MonitorExposer::MonitorExposer(std::string inputFilename, 
                                prometheus::Exposer& inputExposer,
                                std::shared_ptr<prometheus::Registry> inputRegistry) : 
-        counter_family (BuildCounter()
-                .Name("call_on_data_available_total1")
-                .Help("How many times this processor call on_data_available()")
-                .Labels({{"label", "value"}})
-                .Register(*inputRegistry)),
-        second_counter (counter_family.Add(
-                {{"label1", "value1"}})),
-        gauge_family (BuildGauge()
-                .Name("domainParticipant_process_statistics1")
-                .Help("Tell the current position of the squre shape")
-                .Labels({{"job", "RTI_Shape"}})
-                .Register(*inputRegistry)),
-        user_cpu_time (gauge_family.Add(
-                {{"process", "user_cpu_time"}})),
-        kernel_cpu_time (gauge_family.Add(
-                {{"process", "kernel_cpu_time"}})),
         mapper (Mapper(inputFilename)),
         exposer (inputExposer),
         registry (inputRegistry)
 {
-        mapper.registerMetric(registry);
+        mapper.registerMetrics(registry);
         exposer.RegisterCollectable(registry);
         filename = inputFilename;
         std::cout << "MonitorExposer(Processor) is created" << '\n';
@@ -106,45 +90,19 @@ void MonitorExposer::on_input_enabled(
 void MonitorExposer::on_data_available(rti::routing::processor::Route &route)
 {
     std::cout << "MonitorExposer::on_data_available is called." << '\n';
-    std::cout << "____________________________________" << '\n';
-    // Prometheus count how many time on_data_available() is called
-    second_counter.Increment();
 
     // Split input shapes  into mono-dimensional output shapes
     auto input_samples = route.input<DynamicData>(0).take();
     for (auto sample : input_samples) {
-        mapper.updateMetric((output_data_.get()));
         if (sample.info().valid()) { 
             output_data_ = sample.data();
-            /****************************************
-            How to get value from pushed_sample_count
-            process: 
-                user_cpu_time: 
-                        sec: 351
-                        nanosec: 764159998
-            *****************************************/
-
-           double var = (double) output_data_.get().value<DynamicData>("process")
-                .value<DynamicData>("user_cpu_time")
-                .value<int64_t>("sec");
-           user_cpu_time.Set(var);
-           var = (double) output_data_.get().value<DynamicData>("process")
-                .value<DynamicData>("kernel_cpu_time")
-                .value<int64_t>("sec");
-           kernel_cpu_time.Set(var);
+            mapper.updateMetrics((output_data_.get()));
         } else {
-            // set x and y data for prometheus
             output_data_ = sample.data();
-            double var = (double) output_data_.get().value<DynamicData>("process")
-                .value<DynamicData>("user_cpu_time")
-                .value<int64_t>("sec");
-            user_cpu_time.Set(var);
-            var = (double) output_data_.get().value<DynamicData>("process")
-                .value<DynamicData>("kernel_cpu_time")
-                .value<int64_t>("sec");
-            kernel_cpu_time.Set(var);
+            mapper.updateMetrics((output_data_.get()));
         }
     }
+    std::cout << "____________________________________" << '\n';
 }
 
 /*
@@ -152,6 +110,8 @@ void MonitorExposer::on_data_available(rti::routing::processor::Route &route)
  */
 
 MonitorProcessorPlugin::MonitorProcessorPlugin(const rti::routing::PropertySet &properties)
+/* user can provide HTTP Address for exposer to use or DEFAULT_ADDRESS of 127.0.0.1:8080
+   Note: user will need to tell prometheus about the custom address in prometheus.yml */
 : exposer {(properties.find("exposer") != properties.end() ? properties.find("exposer")->second: DEFAULT_ADDRESS) , 1},
   registry (std::make_shared<Registry>())
 {       

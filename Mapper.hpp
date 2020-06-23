@@ -20,6 +20,9 @@
 #include <rti/routing/processor/ProcessorPlugin.hpp>
 
 #include <prometheus/counter.h>
+#include <prometheus/gauge.h>
+#include <prometheus/histogram.h>
+#include <prometheus/summary.h>
 #include <prometheus/exposer.h>
 #include <prometheus/registry.h>
 
@@ -35,6 +38,12 @@ using namespace prometheus;
 
 typedef boost::variant<Family<Counter>, Family<Gauge>, Family<Histogram>, Family<Summary>> METRIC_VARIANT;
 
+enum metricTypes {
+    counter,
+    gauge,
+    histogram,
+    summary
+};
 
 class Mapper {
     public:
@@ -44,24 +53,30 @@ class Mapper {
         *  Mapper will create a /metric based on config FILENAME 
         *  Then register it to the one and only REGISTRY 
         */
-        void registerMetric(std::shared_ptr<Registry> registry);
+        void registerMetrics(std::shared_ptr<Registry> registry);
 
         /* 
         *  Uppon receiving samples (on_data_available) processor 
         *  should pass the sample to this function to update metric 
         *  Return: 1 if success, 0 otherwise
         */
-        int updateMetric(const dds::core::xtypes::DynamicData& data);
+        int updateMetrics(const dds::core::xtypes::DynamicData& data);
 
     private:
-        string filename;
-        dds::core::optional<dds::core::xtypes::DynamicData> ddsData;
+        string configFilename;
 
-        // problem with size of Histogram
-       // map<string, prometheus::Family<prometheus::Counter>*> metricsMap;
-       // map<string, METRIC_VARIANT &> metricsMap;
-       
-       map<string, boost::any> metricsMap;
+        /*
+        * map which keeps track of metric Family created
+        * KEY: name of the given metric as a key, 
+        *   defined by user via yaml configuration file
+        * VALUE: boost::any hold prometheus::Family<> *
+        *   the reason for using boost::any is to hold 
+        *   any type of Family<Counter, Gauge, Histogram, Summary>
+        *   NOTE: boost::any instead of std::any for older c++ version
+        */
+        map<string, boost::any> metricsMap;
+
+        map<string, METRIC_VARIANT> metric_map;
 };
 
 #endif

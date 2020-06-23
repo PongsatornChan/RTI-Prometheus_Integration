@@ -63,15 +63,6 @@ private:
     // You can use std::optional if supported in your platform
     dds::core::optional<dds::core::xtypes::DynamicData> output_data_;
 
-    // Prometheus components
-    // prometheus::Exposer exposer{"127.0.0.1:8080", 1};
-    // std::shared_ptr<Registry> registry;
-    prometheus::Family<prometheus::Counter>& counter_family;
-    prometheus::Counter& second_counter;
-    prometheus::Family<prometheus::Gauge>& gauge_family;
-    prometheus::Gauge& user_cpu_time;
-    prometheus::Gauge& kernel_cpu_time;
-
     // Yaml filename
     std::string filename;
 
