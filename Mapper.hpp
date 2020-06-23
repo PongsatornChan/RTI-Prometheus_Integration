@@ -36,7 +36,12 @@
 using namespace std;
 using namespace prometheus;
 
-typedef boost::variant<Family<Counter>, Family<Gauge>, Family<Histogram>, Family<Summary>> METRIC_VARIANT;
+typedef boost::variant<boost::blank, 
+                       Family<Counter>*, 
+                       Family<Gauge>*, 
+                       Family<Histogram>*, 
+                       Family<Summary>*> 
+        METRIC_VARIANT;
 
 enum metricTypes {
     counter,
@@ -69,14 +74,16 @@ class Mapper {
         * map which keeps track of metric Family created
         * KEY: name of the given metric as a key, 
         *   defined by user via yaml configuration file
-        * VALUE: boost::any hold prometheus::Family<> *
-        *   the reason for using boost::any is to hold 
-        *   any type of Family<Counter, Gauge, Histogram, Summary>
-        *   NOTE: boost::any instead of std::any for older c++ version
+        * VALUE: boost::variant hold prometheus::Family<> *
+        *   the reason for using boost::variant is to hold 
+        *   any type of Family<Counter, Gauge, Histogram, Summary>* 
+        *   based on ymal file.
+        *   NOTE: boost::vairant instead of std::variant for older c++ version
         */
-        map<string, boost::any> metricsMap;
+        map<string, METRIC_VARIANT> metricsMap;
 
-        map<string, METRIC_VARIANT> metric_map;
+        METRIC_VARIANT createFamily(metricTypes, string, string, 
+                        const map<string, string>&, shared_ptr<Registry>);
 };
 
 #endif
