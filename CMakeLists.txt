@@ -45,11 +45,10 @@ find_package(
 set(CMAKE_CXX_STANDARD 11)
 
 # prometheus
-set(prometheus-cpp_DIR "/Users/mchan/Desktop/PrometheusClientLibrary/prometheus-cpp/build/deploy/usr/local/lib/cmake/prometheus-cpp")
+set(prometheus-cpp_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/prometheus-cpp/build/deploy/usr/local/lib/cmake/prometheus-cpp")
 find_package(prometheus-cpp CONFIG REQUIRED)
 
 # yaml 
-set(yaml-cpp_DIR "/Users/mchan/rti_workspace/lib/YAML/yaml-cpp/build")
 set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "disable yaml tests")
 set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "disable yaml tools")
 set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "disable yaml contrib")

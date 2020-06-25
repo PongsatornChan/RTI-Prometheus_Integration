@@ -5,6 +5,60 @@ and syntax used assume a Unix-based system. If you run this example in a
 different architecture, please adapt the commands accordingly.
 
 ## Building the Example :wrench:
+Let build libraries first.
+1. yaml-cpp
+    I. Navigate into the source directory third-party/yaml-cpp, and type:
+
+    ```
+    mkdir build
+    cd build
+    ```
+
+    II. Run CMake. The basic syntax is:
+
+    ```
+    cmake [-G generator] [-DYAML_BUILD_SHARED_LIBS=ON|OFF] ..
+    ```
+
+    * The `generator` is whatever type of build system you'd like to use. To see a full list of generators on your platform, just run `cmake` (with no arguments). For example:
+        * On Windows, you might use "Visual Studio 12 2013" to generate a Visual Studio 2013 solution or "Visual Studio 14 2015 Win64" to generate a 64-bit Visual Studio 2015 solution.
+        * On OS X, you might use "Xcode" to generate an Xcode project
+        * On a UNIX-y system, simply omit the option to generate a makefile
+
+    * yaml-cpp defaults to building a static library, but you may build a shared library by specifying `-DYAML_BUILD_SHARED_LIBS=ON`.
+
+    * For more options on customizing the build, see the [CMakeLists.txt](https://github.com/jbeder/yaml-cpp/blob/master/CMakeLists.txt) file.
+
+    III. Build it!
+
+    VI. To clean up, just remove the `build` directory.
+
+2. prometheus-cpp
+    For CMake builds don't forget to fetch the submodules first. Then build as usual.
+
+    First, navigate into source directory, third-party/prometheus-cpp, then:
+
+    ``` shell
+    # fetch third-party dependencies
+    git submodule init
+    git submodule update
+
+    mkdir _build
+    cd _build
+
+    # run cmake
+    cmake .. -DBUILD_SHARED_LIBS=ON # or OFF for static libraries
+
+    # build
+    make -j 4
+
+    # run tests
+    ctest -V
+
+    # install the libraries and headers
+    mkdir -p deploy
+    make DESTDIR=`pwd`/deploy install
+    ```
 
 To build this example, first run CMake to generate the corresponding build
 files. We recommend you use a separate directory to store all the generated
@@ -54,8 +108,6 @@ export RTI_LD_LIBRARY_PATH=$NDDSHOME/lib/<ARCH>
 where `<ARCH>` shall be replaced with the target architecture you used to build
 the example in the previous step.
 
-In CMakeList.txt, you might need to check and change paths accordingly.
-
 ### MonitorProcessor
 
 1.  Run one instance of *ShapesDemo* on domain 0. This will be the publisher
@@ -89,7 +141,7 @@ In CMakeList.txt, you might need to check and change paths accordingly.
 5.  Now go to http://localhost:9090/graph in your browser.
     You can find call_on_data_available_total and data_writer_status, 
     which are metrics expose by our processor.
-    NOTE: as of 6/10/20, You will see the value of both metrics 0. Work in progress
+    NOTE: as of 6/25/20, You will see the value of both metrics 0. Work in progress
 
 ### Libraries used
 I am learning CMake so if you faces problems involving libraries, CMake build, etc. 
@@ -98,3 +150,7 @@ Thank you for your patient.
 1. prometheus-cpp: https://github.com/jupp0r/prometheus-cpp
 2. yaml-cpp: https://github.com/jbeder/yaml-cpp
 3. boost: https://www.boost.org/doc/libs/1_73_0/more/getting_started/unix-variants.html
+
+**NOTE** You need to have boost library installed to work. 
+        For the first two library, You need to build prometheus-cpp and yaml-cpp. 
+        You can find them in third-party directory. Both have detail build instruction in README files.
