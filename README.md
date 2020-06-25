@@ -1,3 +1,7 @@
+# rticonnextdds-prometheus
+
+A Routing Service Processor plugin to publish DDS monitoring data as Prometheus metrics.
+
 # Example Code: Routing Service Processor
 
 Below there are the instructions to build and run this example. All the commands
@@ -154,3 +158,4 @@ Thank you for your patient.
 **NOTE** You need to have boost library installed to work. 
         For the first two library, You need to build prometheus-cpp and yaml-cpp. 
         You can find them in third-party directory. Both have detail build instruction in README files.
+
