@@ -25,6 +25,7 @@
 #include <prometheus/summary.h>
 #include <prometheus/exposer.h>
 #include <prometheus/registry.h>
+#include <prometheus/metric_type.h>
 
 #include "yaml-cpp/yaml.h"
 
@@ -32,6 +33,7 @@
 
 #include "boost/variant.hpp"
 #include "boost/any.hpp"
+#include "boost/algorithm/string.hpp"
 
 using namespace std;
 using namespace prometheus;
@@ -41,14 +43,14 @@ typedef boost::variant<boost::blank,
                        Family<Gauge>*, 
                        Family<Histogram>*, 
                        Family<Summary>*> 
-        METRIC_VARIANT;
+        Family_variant;
 
-enum metricTypes {
-    counter,
-    gauge,
-    histogram,
-    summary
-};
+typedef boost::variant<boost::blank,
+                       Counter*,
+                       Gauge*,
+                       Histogram*,
+                       Summary*>
+        Metric_variant;
 
 class Mapper {
     public:
@@ -80,10 +82,23 @@ class Mapper {
         *   based on ymal file.
         *   NOTE: boost::vairant instead of std::variant for older c++ version
         */
-        map<string, METRIC_VARIANT> metricsMap;
+        map<string, Family_variant> metricsMap;
 
-        METRIC_VARIANT createFamily(metricTypes, string, string, 
+        Family_variant createFamily(MetricType, string, string, 
                         const map<string, string>&, shared_ptr<Registry>);
 };
+
+class add_metric: public boost::static_visitor<bool> {
+public:
+    bool operator()( Family<prometheus::Counter>* operand, map<string, string> labels) const;
+    bool operator()( Family<prometheus::Gauge>* operand, map<string, string> labels ) const;
+    bool operator()( Family<prometheus::Summary>* operand, map<string, string> labels ) const;
+    bool operator()( Family<prometheus::Histogram>* operand, map<string, string> labels ) const;
+    bool operator()( boost::blank operand, map<string, string> labels ) const
+    { return false;}
+};
+
+MetricType whatType(std::string type);
+
 
 #endif

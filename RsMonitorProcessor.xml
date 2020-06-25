@@ -72,6 +72,24 @@
                     </input> 
                 </topic_route>
 
+                <!-- <topic_route name="MonitoringTopicToMetric_2">
+                    <processor plugin_name="MonitorPluginLib::MonitorProcessor">
+                        <property>
+                            <value>
+                                <element>
+                                    <name>mapping</name>
+                                    <value>mapping2.yml</value>
+                                </element>
+                            </value>
+                        </property>
+                    </processor> 
+                    <input name="dataWriterMatchSub" participant="domain0">
+                        <topic_name>rti/dds/monitoring/dataWriterEntityMatchedSubscriptionStatistics</topic_name>
+                        <registered_type_name>rti::dds::monitoring::DataWriterEntityMatchedSubscriptionStatistics</registered_type_name>
+                        <creation_mode>IMMEDIATE</creation_mode>
+                    </input> 
+                </topic_route> -->
+
             </session>
 
         </domain_route>
