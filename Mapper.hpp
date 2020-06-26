@@ -70,7 +70,7 @@ class Mapper {
         int updateMetrics(const dds::core::xtypes::DynamicData& data);
 
     private:
-        string configFilename;
+        YAML::Node config;
 
         /*
         * map which keeps track of metric Family created
@@ -88,14 +88,29 @@ class Mapper {
                         const map<string, string>&, shared_ptr<Registry>);
 };
 
+struct MetricConfig {
+    std::string dataPath;
+    std::string dataType;
+    std::map<std::string, std::string> labels; 
+};
+
+struct FamilyConfig {
+    std::string name;
+    std::string help;
+    prometheus::MetricType type;
+    std::map<std::string, std::string> labels;
+    MetricConfig* metrics; 
+};
+
 class add_metric: public boost::static_visitor<bool> {
 public:
-    bool operator()( Family<prometheus::Counter>* operand, map<string, string> labels) const;
-    bool operator()( Family<prometheus::Gauge>* operand, map<string, string> labels ) const;
-    bool operator()( Family<prometheus::Summary>* operand, map<string, string> labels ) const;
-    bool operator()( Family<prometheus::Histogram>* operand, map<string, string> labels ) const;
-    bool operator()( boost::blank operand, map<string, string> labels ) const
+    bool operator()( Family<prometheus::Counter>* operand) const;
+    bool operator()( Family<prometheus::Gauge>* operand) const;
+    bool operator()( Family<prometheus::Summary>* operand) const;
+    bool operator()( Family<prometheus::Histogram>* operand) const;
+    bool operator()( boost::blank operand) const
     { return false;}
+    map<string, string> labels;
 };
 
 MetricType whatType(std::string type);

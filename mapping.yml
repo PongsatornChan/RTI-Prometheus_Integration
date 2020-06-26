@@ -1,6 +1,6 @@
 Family: 
   name: "domainParticipant_process_statistics"
-  type: "Guage"
+  type: "Gauge"
   description: "Tell cpu usage"
   labels: 
     job: "Shape Demo monitoring topic"

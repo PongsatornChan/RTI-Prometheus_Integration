@@ -60,8 +60,12 @@ struct convert<map<string, string>> {
 * Note: You have to run routing service from within build dir. 
 */
 Mapper::Mapper(std::string configFile) {
-    configFilename = "../";
+    string configFilename = "../";
     configFilename.append(configFile);
+    config = YAML::LoadFile(configFilename);
+    if (config.IsNull()) {
+        throw YAML::BadFile(configFilename);
+    }
 }
 
 /*
@@ -70,24 +74,27 @@ Mapper::Mapper(std::string configFile) {
 *   - Evolving Extendable type
 */
 void Mapper::registerMetrics(std::shared_ptr<Registry> registry) {
-    YAML::Node config = YAML::LoadFile(configFilename);
     YAML::Node family1 = config["Family"];
     string name = family1["name"].as<string>();
     MetricType type = whatType(family1["type"].as<string>());
     string help = family1["description"].as<string>();
     map<string, string> labelsMap = family1["labels"].as<map<string, string>>(); 
     
+
     Family_variant temp = createFamily(MetricType::Counter, 
                                     "call_on_data_available_total", 
                                     "How many times this processor call on_data_available()",
                                     {{"label", "value"}}, registry);
-    // FIXME it doesn't for some reason.
-    //boost::apply_visitor(add_metric(), temp, {{"processor", "1"}});
+    add_metric adder;
+    adder.labels = {{"processor", "1"}};
+    boost::apply_visitor(adder, temp);
     metricsMap["call_on_data_available_total"] = temp;
 
     temp = createFamily(type, name, help, labelsMap, registry);
-    //boost::apply_visitor(add_metric(), temp, {{"process", "user_cpu_time"}}); 
-    //boost::apply_visitor(add_metric(), temp, {{"process", "kernel_cpu_time"}}); 
+    adder.labels = {{"process", "user_cpu_time"}};
+    boost::apply_visitor(adder, temp); 
+    adder.labels = {{"process", "kernel_cpu_time"}};
+    boost::apply_visitor(adder, temp); 
     metricsMap["domainParticipant_process_statistics"] = temp;
 }
 
@@ -149,11 +156,14 @@ MetricType whatType(std::string type) {
     } else if (boost::iequals(type, "summary")) {
         return MetricType::Summary;
     } else {
-        return MetricType::Untyped;
+        string msg = type + " does not match any metric types.";
+        msg.append("\nUsing Gauge instead.");
+        std::cout << msg << endl;
+        return MetricType::Gauge;
     }
 }
 
-bool add_metric::operator()( Family<prometheus::Counter>* operand, map<string, string> labels) const {
+bool add_metric::operator()( Family<prometheus::Counter>* operand) const {
     try {
         operand->Add(labels);
         return true;
@@ -162,7 +172,7 @@ bool add_metric::operator()( Family<prometheus::Counter>* operand, map<string, s
     }
 }
 
-bool add_metric::operator()( Family<prometheus::Gauge>* operand, map<string, string> labels ) const {
+bool add_metric::operator()( Family<prometheus::Gauge>* operand) const {
     try {
         operand->Add(labels);
         return true;
@@ -170,7 +180,7 @@ bool add_metric::operator()( Family<prometheus::Gauge>* operand, map<string, str
         return false;
     }
 }
-bool add_metric::operator()( Family<prometheus::Summary>* operand, map<string, string> labels ) const {
+bool add_metric::operator()( Family<prometheus::Summary>* operand) const {
     try {
         auto quantile = Summary::Quantiles{{0.5, 0.05}, {0.7, 0.03}, {0.90, 0.01}};
         operand->Add(labels, quantile);
@@ -179,7 +189,7 @@ bool add_metric::operator()( Family<prometheus::Summary>* operand, map<string, s
         return false;
     }
 }
-bool add_metric::operator()( Family<prometheus::Histogram>* operand, map<string, string> labels ) const {
+bool add_metric::operator()( Family<prometheus::Histogram>* operand) const {
     try {
         operand->Add(labels, prometheus::Histogram::BucketBoundaries{0, 1, 2});
         return true;
