@@ -26,6 +26,7 @@
 using namespace std;
 using namespace dds::core::xtypes;
 using namespace prometheus;
+using namespace boost;
 
 namespace YAML {
 template<>
@@ -51,8 +52,31 @@ struct convert<map<string, string>> {
 };
 }
 
-//---------Mapper---------------------------------------------------------------------------------
+//---------FamilyConfig---------------------------------------------------------------------------------
+FamilyConfig::FamilyConfig(MetricType iType, string iName, string iHelp, map<string, string> iLabels,
+                unsigned long num, vector<MetricConfig*> iMetrics) : 
+            type (iType),
+            name (iName),
+            help (iHelp),
+            labels (iLabels),
+            numMetrics (num),
+            metrics (iMetrics) 
+{
+
+}
+
+//---------FamilyConfig---------------------------------------------------------------------------------
+MetricConfig::MetricConfig(string path, string type, map<string,string> inputLabels) : 
+    dataPath (path),
+    dataType (type),
+    labels (inputLabels)
+{
+
+}
+
 //------------------------------------------------------------------------------------------------
+//---------Mapper---------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------
 
 /*
 * CONFIG_FILE as path to .yml file which specify how to make metrics
@@ -62,9 +86,38 @@ struct convert<map<string, string>> {
 Mapper::Mapper(std::string configFile) {
     string configFilename = "../";
     configFilename.append(configFile);
-    config = YAML::LoadFile(configFilename);
+    YAML::Node config = YAML::LoadFile(configFilename);
     if (config.IsNull()) {
         throw YAML::BadFile(configFilename);
+    }
+
+    // experienmental struct
+    for (YAML::const_iterator it = config.begin(); it != config.end(); ++it) {
+        string name = it->second["name"].as<string>();
+        MetricType type = whatType(it->second["type"].as<string>());
+        string help = it->second["description"].as<string>();
+        map<string, string> labelsMap = it->second["labels"].as<map<string, string>>(); 
+
+        YAML::Node metrics = it->second["metrics"];
+        unsigned long num = metrics.size();
+        std::vector<MetricConfig*> metrics_vec;
+        if (metrics.IsMap() && num > 0) {
+            for (YAML::const_iterator me = metrics.begin(); me != metrics.end(); ++me) {
+                string dataPath = me->second["data"].as<string>();
+                string dataType = me->second["type"].as<string>();
+                map<string, string> metricLabels = me->second["labels"].as<map<string, string>>();
+                // TODO-- Deallocation
+                MetricConfig* metricConfig = new MetricConfig(dataPath, dataType, metricLabels); 
+                metrics_vec.push_back(metricConfig);
+            }
+        } else{
+            // TODO-- should push to logging but I have no idea how
+            std::cout << "YAML config: Did not specify metrics or wrong format\n";
+            num = 0;
+        }
+        // TODO-- Deallocation
+        FamilyConfig* famConfig = new FamilyConfig(type, name, help, labelsMap, num, metrics_vec);
+        configMap[name] = famConfig;
     }
 }
 
@@ -74,13 +127,7 @@ Mapper::Mapper(std::string configFile) {
 *   - Evolving Extendable type
 */
 void Mapper::registerMetrics(std::shared_ptr<Registry> registry) {
-    YAML::Node family1 = config["Family"];
-    string name = family1["name"].as<string>();
-    MetricType type = whatType(family1["type"].as<string>());
-    string help = family1["description"].as<string>();
-    map<string, string> labelsMap = family1["labels"].as<map<string, string>>(); 
-    
-
+    // call_on_data_avaialable_total is default metric
     Family_variant temp = createFamily(MetricType::Counter, 
                                     "call_on_data_available_total", 
                                     "How many times this processor call on_data_available()",
@@ -88,14 +135,21 @@ void Mapper::registerMetrics(std::shared_ptr<Registry> registry) {
     add_metric adder;
     adder.labels = {{"processor", "1"}};
     boost::apply_visitor(adder, temp);
-    metricsMap["call_on_data_available_total"] = temp;
+    familyMap["call_on_data_available_total"] = temp;
 
-    temp = createFamily(type, name, help, labelsMap, registry);
-    adder.labels = {{"process", "user_cpu_time"}};
-    boost::apply_visitor(adder, temp); 
-    adder.labels = {{"process", "kernel_cpu_time"}};
-    boost::apply_visitor(adder, temp); 
-    metricsMap["domainParticipant_process_statistics"] = temp;
+    for (map<string, FamilyConfig*>::const_iterator cit = configMap.begin();
+        cit != configMap.end(); ++cit) {
+        
+        FamilyConfig* fam = cit->second;
+        std::cout << "fam->name: " << fam->name << endl;
+        std::cout << "fam->numMetrics: " << fam->numMetrics << endl;
+        temp = createFamily(fam, registry);
+        for (int i = 0; i < fam->numMetrics; ++i) {
+            adder.labels = fam->metrics[i]->labels;
+            boost::apply_visitor(adder, temp); 
+        }
+        familyMap[fam->name] = temp;
+    }
 }
 
 /*
@@ -105,7 +159,7 @@ void Mapper::registerMetrics(std::shared_ptr<Registry> registry) {
 * and return boost::blank if fail
 */
 Family_variant Mapper::createFamily(MetricType type, string name, string detail, 
-                       const map<string, string>& labels, shared_ptr<Registry> registry) {
+                       const map<string, string>& labels, std::shared_ptr<Registry> registry) {
     switch(type){
         case MetricType::Counter:
             return &(BuildCounter().Name(name).Help(detail).Labels(labels).Register(*registry));
@@ -120,33 +174,16 @@ Family_variant Mapper::createFamily(MetricType type, string name, string detail,
     }
 }
 
-int Mapper::updateMetrics(const dds::core::xtypes::DynamicData& data) {
-    // TODO-- function for metric retrival would be nice
-    // auto counter_fam = boost::get<prometheus::Family<Counter>*>(metricsMap["call_on_data_available_total"]);
-    // prometheus::Counter& counter = counter_fam->Add({{"processor", "1"}});
-    // counter.Increment();
-
-    // auto gauge_fam_ptr = boost::get<prometheus::Family<Gauge>*>(metricsMap["domainParticipant_process_statistics"]);
-
-    // prometheus::Gauge& user_cpu_time = gauge_fam_ptr->Add({{"process", "user_cpu_time"}});
-    // prometheus::Gauge& kernel_cpu_time = gauge_fam_ptr->Add({{"process", "kernel_cpu_time"}});
-    // // TODO-- function for data retrival would be nice too
-    // double var = (double) data.value<DynamicData>("process")
-    //             .value<DynamicData>("user_cpu_time")
-    //             .value<int64_t>("sec");
-    // user_cpu_time.Set(var);
-    // var = (double) data.value<DynamicData>("process")
-    //             .value<DynamicData>("kernel_cpu_time")
-    //             .value<int64_t>("sec");
-    // kernel_cpu_time.Set(var);
-
-    return 1;
+Family_variant Mapper::createFamily(FamilyConfig* famConfig, std::shared_ptr<Registry> registry) {
+    return createFamily(famConfig->type, famConfig->name, famConfig->help, famConfig->labels, registry);
 }
 
-//--- end Mapper -----------------------------------------------------------------------------------------------------
-//--------------------------------------------------------------------------------------------------------------------
-
-MetricType whatType(std::string type) {
+/* 
+*  Utility function to determine type of metric 
+*  based on sting TYPE given
+*  Return: MetricType 
+*/
+MetricType Mapper::whatType(std::string type) {
     if (boost::iequals(type, "counter")) {
         return MetricType::Counter;
     } else if (boost::iequals(type, "gauge")) {
@@ -163,6 +200,53 @@ MetricType whatType(std::string type) {
     }
 }
 
+double Mapper::getData(const dds::core::xtypes::DynamicData& data, string path) {
+    std::vector<string> results;
+    boost::split(results, path, [](char c){return c == ':';});
+    DynamicData temp = data;
+    for (int i = 0; i < results.size(); ++i) {
+        if (i == results.size()-1) {
+            return (double) temp.value<int64_t>(results[i]);
+        }
+        temp = temp.value<DynamicData>(results[i]);
+    }
+    throw new std::runtime_error("can't find value in " + path);
+    return 0;
+}
+
+
+int Mapper::updateMetrics(const dds::core::xtypes::DynamicData& data) {
+    Family<Counter>* counter_fam = 
+        boost::get<Family<Counter>*>(familyMap["call_on_data_available_total"]);
+    Counter& counter = counter_fam->Add({{"processor", "1"}});
+    counter.Increment();
+
+    for (map<string, FamilyConfig*>::const_iterator cit = configMap.begin(); cit != configMap.end(); ++cit) {
+        for (int i = 0; i < cit->second->metrics.size(); ++i) {
+            MetricConfig* me_ptr = cit->second->metrics[i];
+            double var;
+            try{
+                var = Mapper::getData(data, me_ptr->dataPath);
+                // DEBUG
+                std::cout << "getData with " << me_ptr->dataPath;
+                std::cout << " return " << var << endl;
+            } catch(std::exception& e) {
+                std::cout << "getData error: set to 0" << endl; 
+                var = 0;
+            }
+            update_metric updater;
+            updater.value = var;
+            updater.labels = me_ptr->labels;
+            boost::apply_visitor(updater, familyMap[cit->first]);
+        }
+    }
+
+    return 1;
+}
+//--- end Mapper -----------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------------------------
+
+//--- add_metric -----------------------------------------------------------------------------------------------------
 bool add_metric::operator()( Family<prometheus::Counter>* operand) const {
     try {
         operand->Add(labels);
@@ -198,3 +282,40 @@ bool add_metric::operator()( Family<prometheus::Histogram>* operand) const {
     }
 }
 
+//--- Update_metric ----------------------------------------------------------------------------
+bool update_metric::operator()( Family<prometheus::Counter>* operand) const {
+    try {
+        prometheus::Counter& counter = operand->Add(labels);
+        counter.Increment();
+        return true;
+    } catch(const std::exception& e) {
+        return false;
+    }
+}
+
+bool update_metric::operator()( Family<prometheus::Gauge>* operand) const {
+    try {
+        prometheus::Gauge& gauge = operand->Add(labels);
+        gauge.Set(value);
+        return true;
+    } catch(const std::exception& e) {
+        return false;
+    }
+}
+bool update_metric::operator()( Family<prometheus::Summary>* operand) const {
+    try {
+        auto quantile = Summary::Quantiles{{0.5, 0.05}, {0.7, 0.03}, {0.90, 0.01}};
+        operand->Add(labels, quantile);
+        return true;
+    } catch(const std::exception& e) {
+        return false;
+    }
+}
+bool update_metric::operator()( Family<prometheus::Histogram>* operand) const {
+    try {
+        operand->Add(labels, prometheus::Histogram::BucketBoundaries{0, 1, 2});
+        return true;
+    } catch(const std::exception& e) {
+        return false;
+    }
+}

@@ -38,6 +38,70 @@
 using namespace std;
 using namespace prometheus;
 
+/*
+*   Represent a metric
+*   It is always a part of a family 
+*/
+struct MetricConfig {
+    /* 
+    * path to targeted value in DDS Sample 
+    * each level seperate by ":"
+    */ 
+    string dataPath;
+
+    /* Data type of the target value */
+    string dataType;
+
+    /* 
+    * labels that uniquely identify this metric from
+    * all other metrics in its family
+    */
+    std::map<string, string> labels; 
+    
+    MetricConfig(string path, string type, map<string,string> inputLabels);
+};
+
+/*
+*   Represent a YAML Node contains all nessesary information to 
+*   construct Family metrics with.
+*/
+struct FamilyConfig {
+    /* 
+    * family type (Counter, Gauge, Histogram, Summary)
+    */
+    prometheus::MetricType type;
+
+    /*
+    * name of family that will appear in prometheus
+    */ 
+    std::string name;
+
+    /*
+    * helpful description of this family, what it represents.
+    */ 
+    std::string help;
+
+    /*
+    * starter labels of this family
+    * They will appear in all metrics of this family  
+    */ 
+    std::map<std::string, std::string> labels;
+
+    /* number of metrics this family contains */
+    unsigned long numMetrics;
+
+    /*
+    * list of metric configuration to create metrics with
+    */
+    std::vector<MetricConfig*> metrics; 
+    
+    FamilyConfig(MetricType iType, string iName, string iHelp, map<string, string> iLabels,
+                unsigned long num, vector<MetricConfig*> iMetrics);
+};      
+
+/*
+* All possible type of Family
+*/
 typedef boost::variant<boost::blank, 
                        Family<Counter>*, 
                        Family<Gauge>*, 
@@ -45,6 +109,9 @@ typedef boost::variant<boost::blank,
                        Family<Summary>*> 
         Family_variant;
 
+/*
+* All possible type of metric
+*/
 typedef boost::variant<boost::blank,
                        Counter*,
                        Gauge*,
@@ -52,6 +119,9 @@ typedef boost::variant<boost::blank,
                        Summary*>
         Metric_variant;
 
+/*
+* This class handle all mapping behavior of DDS-to-prometheus
+*/
 class Mapper {
     public:
         Mapper(std::string configFile);
@@ -69,9 +139,14 @@ class Mapper {
         */
         int updateMetrics(const dds::core::xtypes::DynamicData& data);
 
-    private:
-        YAML::Node config;
+        /* 
+        *  Utility function to determine type of metric 
+        *  based on sting given
+        */
+        static MetricType whatType(std::string type);
 
+        static double getData(const dds::core::xtypes::DynamicData& data, string path); 
+    private:
         /*
         * map which keeps track of metric Family created
         * KEY: name of the given metric as a key, 
@@ -82,26 +157,31 @@ class Mapper {
         *   based on ymal file.
         *   NOTE: boost::vairant instead of std::variant for older c++ version
         */
-        map<string, Family_variant> metricsMap;
+        map<string, Family_variant> familyMap;
 
-        Family_variant createFamily(MetricType, string, string, 
-                        const map<string, string>&, shared_ptr<Registry>);
+        /*
+        * map that keeps track of configuration 
+        * for easy access and keep YAML file abstract 
+        * away from the logic of mapping.
+        * Act as YAML file in a way
+        */
+        map<string, FamilyConfig*> configMap;
+
+        /*
+        * Create and register a family of METRIC_TYPE with name NAME,
+        * helpful description of DETAIL, starter labels LABELS, and 
+        * register it to REGISTRY
+        */ 
+        Family_variant createFamily(MetricType, string name, string detail, 
+                        const map<string, string>& labels, shared_ptr<Registry> registry);
+        Family_variant createFamily(FamilyConfig*, shared_ptr<Registry>);
+
+
 };
 
-struct MetricConfig {
-    std::string dataPath;
-    std::string dataType;
-    std::map<std::string, std::string> labels; 
-};
-
-struct FamilyConfig {
-    std::string name;
-    std::string help;
-    prometheus::MetricType type;
-    std::map<std::string, std::string> labels;
-    MetricConfig* metrics; 
-};
-
+/*
+* visitor to Family_variant that add a metric to a giving family 
+*/
 class add_metric: public boost::static_visitor<bool> {
 public:
     bool operator()( Family<prometheus::Counter>* operand) const;
@@ -113,7 +193,17 @@ public:
     map<string, string> labels;
 };
 
-MetricType whatType(std::string type);
+class update_metric: public boost::static_visitor<bool> {
+public:
+    bool operator()( Family<prometheus::Counter>* operand) const;
+    bool operator()( Family<prometheus::Gauge>* operand) const;
+    bool operator()( Family<prometheus::Summary>* operand) const;
+    bool operator()( Family<prometheus::Histogram>* operand) const;
+    bool operator()( boost::blank operand) const
+    { return false;}
+    map<string, string> labels;
+    double value;
+};
 
 
 #endif
