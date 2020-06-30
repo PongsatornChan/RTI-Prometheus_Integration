@@ -78,11 +78,6 @@ MetricConfig::MetricConfig(string path, string type, map<string,string> inputLab
 //---------Mapper---------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------
 
-/*
-* CONFIG_FILE as path to .yml file which specify how to make metrics
-* The yml file should be in the root directory of build.
-* Note: You have to run routing service from within build dir. 
-*/
 Mapper::Mapper(std::string configFile) {
     string configFilename = "../";
     configFilename.append(configFile);
@@ -91,7 +86,6 @@ Mapper::Mapper(std::string configFile) {
         throw YAML::BadFile(configFilename);
     }
 
-    // experienmental struct
     for (YAML::const_iterator it = config.begin(); it != config.end(); ++it) {
         string name = it->second["name"].as<string>();
         MetricType type = whatType(it->second["type"].as<string>());

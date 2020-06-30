@@ -38,70 +38,81 @@
 using namespace std;
 using namespace prometheus;
 
-/*
-*   Represent a metric
-*   It is always a part of a family 
-*/
+/**
+ * Represent a metric
+ * It is always a part of a family 
+ */
 struct MetricConfig {
-    /* 
-    * path to targeted value in DDS Sample 
-    * each level seperate by ":"
-    */ 
+    /** 
+     * path to targeted value in DDS Sample 
+     * each level seperate by ":"
+     */ 
     string dataPath;
 
-    /* Data type of the target value */
+    /// Data type of the target value 
     string dataType;
 
-    /* 
-    * labels that uniquely identify this metric from
-    * all other metrics in its family
-    */
+    /** 
+     * labels that uniquely identify this metric from
+     * all other metrics in its family
+     */
     std::map<string, string> labels; 
     
+    /**
+     * @param PATH path to data in DDS sample, TYPE of data,
+     *        INPUT_LABELS labels to uniquely identify this metric
+     */
     MetricConfig(string path, string type, map<string,string> inputLabels);
 };
 
-/*
-*   Represent a YAML Node contains all nessesary information to 
-*   construct Family metrics with.
-*/
+/**
+ *   Represent a YAML Node contains all nessesary information to 
+ *   construct Family metrics with.
+ */
 struct FamilyConfig {
-    /* 
-    * family type (Counter, Gauge, Histogram, Summary)
-    */
+    /** 
+     * family type (Counter, Gauge, Histogram, Summary)
+     */
     prometheus::MetricType type;
 
-    /*
-    * name of family that will appear in prometheus
-    */ 
+    /**
+     * name of family that will appear in prometheus
+     */ 
     std::string name;
 
-    /*
-    * helpful description of this family, what it represents.
-    */ 
+    /**
+     * helpful description of this family, what it represents.
+     */ 
     std::string help;
 
-    /*
-    * starter labels of this family
-    * They will appear in all metrics of this family  
-    */ 
+    /**
+     * starter labels of this family
+     * They will appear in all metrics of this family  
+     */ 
     std::map<std::string, std::string> labels;
 
-    /* number of metrics this family contains */
+    /// number of metrics this family contains
     unsigned long numMetrics;
 
-    /*
-    * list of metric configuration to create metrics with
-    */
+    /**
+     * list of metric configuration to create metrics with
+     */
     std::vector<MetricConfig*> metrics; 
     
+    /**
+     * @param I_TYPE type of this family, I_NAME name of this family,
+     *        I_HELP helpful description of this family,
+     *        I_LABELS starter labels,
+     *        NUM number of metrics this family contained
+     *        I_METRICS list of metrics this family contained  
+     */ 
     FamilyConfig(MetricType iType, string iName, string iHelp, map<string, string> iLabels,
                 unsigned long num, vector<MetricConfig*> iMetrics);
 };      
 
-/*
-* All possible type of Family
-*/
+/**
+ * All possible type of Family
+ */
 typedef boost::variant<boost::blank, 
                        Family<Counter>*, 
                        Family<Gauge>*, 
@@ -109,9 +120,9 @@ typedef boost::variant<boost::blank,
                        Family<Summary>*> 
         Family_variant;
 
-/*
-* All possible type of metric
-*/
+/**
+ * All possible type of metric
+ */
 typedef boost::variant<boost::blank,
                        Counter*,
                        Gauge*,
@@ -119,30 +130,45 @@ typedef boost::variant<boost::blank,
                        Summary*>
         Metric_variant;
 
-/*
-* This class handle all mapping behavior of DDS-to-prometheus
-*/
+/**
+ * This class handle all mapping behavior of DDS-to-prometheus
+ */
 class Mapper {
     public:
+        /**
+         * Initlize Mapper
+         * 
+         * Note: You have to run routing service from within build dir.
+         * The yml file should be in the root directory of build. 
+         * 
+         * @param CONFIG_FILE as path to .yml file which specify how to make metrics
+         */
         Mapper(std::string configFile);
 
-        /* 
-        *  Mapper will create a /metric based on config FILENAME 
-        *  Then register it to the one and only REGISTRY 
-        */
+        /** 
+         *  Mapper will create a /metric based on config FILENAME 
+         *  Then register it to the one and only REGISTRY 
+         *  
+         * @param REGISTRY to register Family to
+         */
         void registerMetrics(std::shared_ptr<Registry> registry);
 
-        /* 
-        *  Uppon receiving samples (on_data_available) processor 
-        *  should pass the sample to this function to update metric 
-        *  Return: 1 if success, 0 otherwise
-        */
+        /** 
+         *  Uppon receiving samples (on_data_available) processor 
+         *  should pass the sample to this function to update metric 
+         *  
+         * @param DATA the DDS sample
+         * @return 1 if success, 0 otherwise
+         */
         int updateMetrics(const dds::core::xtypes::DynamicData& data);
 
-        /* 
-        *  Utility function to determine type of metric 
-        *  based on sting given
-        */
+        /**
+         *  Utility function to determine type of metric 
+         *  based on sting given
+         * 
+         * @param TYPE string depicting type
+         * @return MetricType (prometheus::Counter, Gauge, Histogram, Summary)
+         */
         static MetricType whatType(std::string type);
 
         static double getData(const dds::core::xtypes::DynamicData& data, string path); 
@@ -179,9 +205,10 @@ class Mapper {
 
 };
 
-/*
-* visitor to Family_variant that add a metric to a giving family 
-*/
+/**
+ * visitor to Family_variant that add 
+ * a metric to a giving family with LABELS 
+ */
 class add_metric: public boost::static_visitor<bool> {
 public:
     bool operator()( Family<prometheus::Counter>* operand) const;
@@ -193,6 +220,10 @@ public:
     map<string, string> labels;
 };
 
+/**
+ * visitor to Family_variant that update metric uniquely 
+ * identified by LABELS with VALUE
+ */
 class update_metric: public boost::static_visitor<bool> {
 public:
     bool operator()( Family<prometheus::Counter>* operand) const;
