@@ -108,6 +108,8 @@ struct FamilyConfig {
      */ 
     FamilyConfig(MetricType iType, string iName, string iHelp, map<string, string> iLabels,
                 unsigned long num, vector<MetricConfig*> iMetrics);
+
+    ~FamilyConfig();
 };      
 
 /**
@@ -145,6 +147,8 @@ class Mapper {
          */
         Mapper(std::string configFile);
 
+        ~Mapper();
+
         /** 
          *  Mapper will create a /metric based on config FILENAME 
          *  Then register it to the one and only REGISTRY 
@@ -171,6 +175,14 @@ class Mapper {
          */
         static MetricType whatType(std::string type);
 
+        /**
+         *  Utility function to retrive value from DATA sample
+         *  using PATH. 
+         * 
+         * @param DATA data from topic sample, used DynamicData as a wrap.
+         *        PATH path to target value, divided by ":" in each level
+         *              left to right.  
+         */
         static double getData(const dds::core::xtypes::DynamicData& data, string path); 
     private:
         /*

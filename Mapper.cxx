@@ -65,7 +65,13 @@ FamilyConfig::FamilyConfig(MetricType iType, string iName, string iHelp, map<str
 
 }
 
-//---------FamilyConfig---------------------------------------------------------------------------------
+FamilyConfig::~FamilyConfig() {
+    for (MetricConfig* metric_ptr: metrics) {
+        delete metric_ptr; 
+    }
+    metrics.clear();
+}
+//---------MetricConfig---------------------------------------------------------------------------------
 MetricConfig::MetricConfig(string path, string type, map<string,string> inputLabels) : 
     dataPath (path),
     dataType (type),
@@ -100,7 +106,6 @@ Mapper::Mapper(std::string configFile) {
                 string dataPath = me->second["data"].as<string>();
                 string dataType = me->second["type"].as<string>();
                 map<string, string> metricLabels = me->second["labels"].as<map<string, string>>();
-                // TODO-- Deallocation
                 MetricConfig* metricConfig = new MetricConfig(dataPath, dataType, metricLabels); 
                 metrics_vec.push_back(metricConfig);
             }
@@ -109,10 +114,20 @@ Mapper::Mapper(std::string configFile) {
             std::cout << "YAML config: Did not specify metrics or wrong format\n";
             num = 0;
         }
-        // TODO-- Deallocation
         FamilyConfig* famConfig = new FamilyConfig(type, name, help, labelsMap, num, metrics_vec);
         configMap[name] = famConfig;
     }
+}
+
+/**
+ * Deallocate metrics_vec (vector<MetricConfig*>)
+ * configMap (map<string, FamilyConfig*>)
+ */ 
+Mapper::~Mapper() {
+     for (map<string, FamilyConfig*>::iterator it = configMap.begin(); it != configMap.end(); ++it) {
+         delete it->second;
+     }
+     configMap.clear();
 }
 
 /*
