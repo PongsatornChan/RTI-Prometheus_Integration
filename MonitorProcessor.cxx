@@ -50,8 +50,6 @@ using namespace prometheus;
  */
 const std::string DEFAULT_ADDRESS = "127.0.0.1:8080";
 
-//std::shared_ptr<Registry> registry = std::make_shared<Registry>();
-
 /* 
 *  initalize all the family and metrics 
 *  These would be handle by MAPPER in the future 

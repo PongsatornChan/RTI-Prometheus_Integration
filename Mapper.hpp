@@ -39,33 +39,6 @@ using namespace std;
 using namespace prometheus;
 
 /**
- * Represent a metric
- * It is always a part of a family 
- */
-struct MetricConfig {
-    /** 
-     * path to targeted value in DDS Sample 
-     * each level seperate by ":"
-     */ 
-    string dataPath;
-
-    /// Data type of the target value 
-    string dataType;
-
-    /** 
-     * labels that uniquely identify this metric from
-     * all other metrics in its family
-     */
-    std::map<string, string> labels; 
-    
-    /**
-     * @param PATH path to data in DDS sample, TYPE of data,
-     *        INPUT_LABELS labels to uniquely identify this metric
-     */
-    MetricConfig(string path, string type, map<string,string> inputLabels);
-};
-
-/**
  *   Represent a YAML Node contains all nessesary information to 
  *   construct Family metrics with.
  */
@@ -84,6 +57,12 @@ struct FamilyConfig {
      * helpful description of this family, what it represents.
      */ 
     std::string help;
+
+    /** 
+     * path to targeted value in DDS Sample 
+     * each level seperate by "."
+     */ 
+    string dataPath;
 
     /**
      * starter labels of this family

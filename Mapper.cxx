@@ -328,3 +328,5 @@ bool update_metric::operator()( Family<prometheus::Histogram>* operand) const {
         return false;
     }
 }
+
+// TODO StatisticVariable only need mean

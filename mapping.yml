@@ -1,18 +1,17 @@
-Family: 
-  name: "domainParticipant_process_statistics"
-  type: "Gauge"
-  description: "Tell cpu usage"
-  labels: 
-    job: "Shape Demo monitoring topic"
-  metrics:
-    user_cpu_time:
-      data: "process:user_cpu_time:sec"
-      type: double
-      labels: 
-        process: "user_cpu_time"
-    kernel_cpu_time:
-      data: "process:kernel_cpu_time:sec"
-      type: double
-      labels: 
-        process: "kernel_cpu_time"
+Topic:
+  # only first time and never change
+  pesudo_metric: 
+    - host.id
+    - process.id
+    - host.name
+  Metric: 
+    # name: "domainParticipant_process_statistics" optional
+    # type: "Gauge" optional
+    data: process.user_cpu_time.sec
+    description: "Tell cpu usage" 
+  Metric1:
+    data: process.kernel_cpu_time.sec
+    description: "Tell kernel_cpu_time"
+  ignore: 
+    - process.user_cpu_time_change
 
