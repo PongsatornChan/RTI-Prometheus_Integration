@@ -18,6 +18,8 @@
 #include <dds/core/xtypes/StructType.hpp>
 #include <rti/routing/processor/Processor.hpp>
 #include <rti/routing/processor/ProcessorPlugin.hpp>
+#include <dds/sub/Sample.hpp>
+#include <dds/sub/SampleInfo.hpp>
 
 #include <prometheus/counter.h>
 #include <prometheus/gauge.h>
@@ -74,19 +76,15 @@ struct FamilyConfig {
     unsigned long numMetrics;
 
     /**
-     * list of metric configuration to create metrics with
-     */
-    std::vector<MetricConfig*> metrics; 
-    
-    /**
      * @param I_TYPE type of this family, I_NAME name of this family,
      *        I_HELP helpful description of this family,
      *        I_LABELS starter labels,
-     *        NUM number of metrics this family contained
-     *        I_METRICS list of metrics this family contained  
+     *        I_DATA_PATH path to value this metric expose
+     *        NUM number of metrics this family contained  
      */ 
-    FamilyConfig(MetricType iType, string iName, string iHelp, map<string, string> iLabels,
-                unsigned long num, vector<MetricConfig*> iMetrics);
+    FamilyConfig(MetricType iType, string iName, string iHelp, 
+                string iDataPath, map<string, string> iLabels,
+                unsigned long num);
 
     ~FamilyConfig();
 };      
@@ -143,7 +141,7 @@ class Mapper {
          * @param DATA the DDS sample
          * @return 1 if success, 0 otherwise
          */
-        int updateMetrics(const dds::core::xtypes::DynamicData& data);
+        int updateMetrics(const dds::core::xtypes::DynamicData&, const dds::sub::SampleInfo&);
 
         /**
          *  Utility function to determine type of metric 

@@ -93,11 +93,13 @@ void MonitorExposer::on_data_available(rti::routing::processor::Route &route)
     auto input_samples = route.input<DynamicData>(0).take();
     for (auto sample : input_samples) {
         if (sample.info().valid()) { 
-            output_data_ = sample.data();
-            mapper.updateMetrics((output_data_.get()));
+            // output_data_ = sample.data();
+            // mapper.updateMetrics((output_data_.get()));
+            mapper.updateMetrics(sample.data(), sample.info());
         } else {
-            output_data_ = sample.data();
-            mapper.updateMetrics((output_data_.get()));
+            // output_data_ = sample.data();
+            // mapper.updateMetrics((output_data_.get()));
+            mapper.updateMetrics(sample.data(), sample.info());
         }
     }
     std::cout << "____________________________________" << '\n';

@@ -83,9 +83,9 @@
                             </value>
                         </property>
                     </processor> 
-                    <input name="dataWriterMatchSub" participant="domain0">
-                        <topic_name>rti/dds/monitoring/dataWriterEntityMatchedSubscriptionStatistics</topic_name>
-                        <registered_type_name>rti::dds::monitoring::DataWriterEntityMatchedSubscriptionStatistics</registered_type_name>
+                    <input name="MonitoringPeriodic" participant="domain0">
+                        <topic_name>rti/service/monitoring/periodic</topic_name>
+                        <registered_type_name>RTI::Service::Monitoring::Periodic</registered_type_name>
                         <creation_mode>IMMEDIATE</creation_mode>
                     </input> 
                 </topic_route> -->

@@ -53,32 +53,19 @@ struct convert<map<string, string>> {
 }
 
 //---------FamilyConfig---------------------------------------------------------------------------------
-FamilyConfig::FamilyConfig(MetricType iType, string iName, string iHelp, map<string, string> iLabels,
-                unsigned long num, vector<MetricConfig*> iMetrics) : 
+FamilyConfig::FamilyConfig(MetricType iType, string iName, string iHelp, 
+string iDataPath, map<string, string> iLabels, unsigned long num) : 
             type (iType),
             name (iName),
             help (iHelp),
             labels (iLabels),
             numMetrics (num),
-            metrics (iMetrics) 
+            dataPath (iDataPath)
 {
 
 }
 
-FamilyConfig::~FamilyConfig() {
-    for (MetricConfig* metric_ptr: metrics) {
-        delete metric_ptr; 
-    }
-    metrics.clear();
-}
-//---------MetricConfig---------------------------------------------------------------------------------
-MetricConfig::MetricConfig(string path, string type, map<string,string> inputLabels) : 
-    dataPath (path),
-    dataType (type),
-    labels (inputLabels)
-{
-
-}
+FamilyConfig::~FamilyConfig() {}
 
 //------------------------------------------------------------------------------------------------
 //---------Mapper---------------------------------------------------------------------------------
@@ -87,34 +74,29 @@ MetricConfig::MetricConfig(string path, string type, map<string,string> inputLab
 Mapper::Mapper(std::string configFile) {
     string configFilename = "../";
     configFilename.append(configFile);
-    YAML::Node config = YAML::LoadFile(configFilename);
+    YAML::Node topic = YAML::LoadFile(configFilename);
+    YAML::Node config = topic["Topic"];
     if (config.IsNull()) {
         throw YAML::BadFile(configFilename);
     }
+    
+    for (YAML::const_iterator it = config["Metrics"].begin(); it != config["Metrics"].end(); ++it) {
+        string name = "rti_dds_monitoring_domainParticipantEntityStatistics";
+        string dataPath = it->second["data"].as<string>();
+        name.append(boost::replace_all_copy(dataPath, ".", "_"));
 
-    for (YAML::const_iterator it = config.begin(); it != config.end(); ++it) {
-        string name = it->second["name"].as<string>();
-        MetricType type = whatType(it->second["type"].as<string>());
-        string help = it->second["description"].as<string>();
-        map<string, string> labelsMap = it->second["labels"].as<map<string, string>>(); 
-
-        YAML::Node metrics = it->second["metrics"];
-        unsigned long num = metrics.size();
-        std::vector<MetricConfig*> metrics_vec;
-        if (metrics.IsMap() && num > 0) {
-            for (YAML::const_iterator me = metrics.begin(); me != metrics.end(); ++me) {
-                string dataPath = me->second["data"].as<string>();
-                string dataType = me->second["type"].as<string>();
-                map<string, string> metricLabels = me->second["labels"].as<map<string, string>>();
-                MetricConfig* metricConfig = new MetricConfig(dataPath, dataType, metricLabels); 
-                metrics_vec.push_back(metricConfig);
-            }
-        } else{
-            // TODO-- should push to logging but I have no idea how
-            std::cout << "YAML config: Did not specify metrics or wrong format\n";
-            num = 0;
+        MetricType type;
+        if (it->second["type"]) {
+            type = whatType(it->second["type"].as<string>());
+        } else {
+            type = MetricType::Gauge;
         }
-        FamilyConfig* famConfig = new FamilyConfig(type, name, help, labelsMap, num, metrics_vec);
+
+        string help = it->second["description"].as<string>();
+        // TODO-- get key member before getting sample!?
+        map<string, string> labelsMap = {{"key", "Member ID"}}; 
+
+        FamilyConfig* famConfig = new FamilyConfig(type, name, help, dataPath, labelsMap, 0);
         configMap[name] = famConfig;
     }
 }
@@ -140,9 +122,10 @@ void Mapper::registerMetrics(std::shared_ptr<Registry> registry) {
     Family_variant temp = createFamily(MetricType::Counter, 
                                     "call_on_data_available_total", 
                                     "How many times this processor call on_data_available()",
-                                    {{"label", "value"}}, registry);
+                                    {{"Test", "on_data_available"}}, registry);
     add_metric adder;
-    adder.labels = {{"processor", "1"}};
+    // TODO-- get topic name this processor associate with
+    adder.labels = {{"Topic", "topic name"}};
     boost::apply_visitor(adder, temp);
     familyMap["call_on_data_available_total"] = temp;
 
@@ -150,13 +133,10 @@ void Mapper::registerMetrics(std::shared_ptr<Registry> registry) {
         cit != configMap.end(); ++cit) {
         
         FamilyConfig* fam = cit->second;
+        // DEBUG
         std::cout << "fam->name: " << fam->name << endl;
         std::cout << "fam->numMetrics: " << fam->numMetrics << endl;
         temp = createFamily(fam, registry);
-        for (int i = 0; i < fam->numMetrics; ++i) {
-            adder.labels = fam->metrics[i]->labels;
-            boost::apply_visitor(adder, temp); 
-        }
         familyMap[fam->name] = temp;
     }
 }
@@ -209,9 +189,13 @@ MetricType Mapper::whatType(std::string type) {
     }
 }
 
+/* 
+*  Utility function to get data from a sample
+*  Return: double 
+*/
 double Mapper::getData(const dds::core::xtypes::DynamicData& data, string path) {
     std::vector<string> results;
-    boost::split(results, path, [](char c){return c == ':';});
+    boost::split(results, path, [](char c){return c == '.';});
     DynamicData temp = data;
     for (int i = 0; i < results.size(); ++i) {
         if (i == results.size()-1) {
@@ -224,30 +208,32 @@ double Mapper::getData(const dds::core::xtypes::DynamicData& data, string path) 
 }
 
 
-int Mapper::updateMetrics(const dds::core::xtypes::DynamicData& data) {
+int Mapper::updateMetrics(const dds::core::xtypes::DynamicData& data, 
+const dds::sub::SampleInfo& info) {
     Family<Counter>* counter_fam = 
         boost::get<Family<Counter>*>(familyMap["call_on_data_available_total"]);
-    Counter& counter = counter_fam->Add({{"processor", "1"}});
+    Counter& counter = counter_fam->Add({{"Topic", "topic name"}});
     counter.Increment();
 
     for (map<string, FamilyConfig*>::const_iterator cit = configMap.begin(); cit != configMap.end(); ++cit) {
-        for (int i = 0; i < cit->second->metrics.size(); ++i) {
-            MetricConfig* me_ptr = cit->second->metrics[i];
-            double var;
-            try{
-                var = Mapper::getData(data, me_ptr->dataPath);
-                // DEBUG
-                std::cout << "getData with " << me_ptr->dataPath;
-                std::cout << " return " << var << endl;
-            } catch(std::exception& e) {
-                std::cout << "getData error: set to 0" << endl; 
-                var = 0;
-            }
-            update_metric updater;
-            updater.value = var;
-            updater.labels = me_ptr->labels;
-            boost::apply_visitor(updater, familyMap[cit->first]);
+       
+        string dataPath = cit->second->dataPath;
+        double var;
+        try{
+            var = Mapper::getData(data, dataPath);
+            // DEBUG
+            std::cout << "getData with " << dataPath;
+            std::cout << " return " << var << endl;
+        } catch(std::exception& e) {
+            std::cout << "getData error: set to 0" << endl; 
+            var = 0;
         }
+        update_metric updater;
+        updater.value = var;
+        std::stringstream ss;
+        ss << info.instance_handle();
+        updater.labels = {{"Instance_ID", ss.str()}} ;
+        boost::apply_visitor(updater, familyMap[cit->first]);
     }
 
     return 1;
