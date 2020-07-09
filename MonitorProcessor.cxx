@@ -54,16 +54,16 @@ const std::string DEFAULT_ADDRESS = "127.0.0.1:8080";
 *  initalize all the family and metrics 
 *  These would be handle by MAPPER in the future 
 */
-MonitorExposer::MonitorExposer(std::string inputFilename, 
-                               prometheus::Exposer& inputExposer,
-                               std::shared_ptr<prometheus::Registry> inputRegistry) : 
-        mapper (Mapper(inputFilename)),
-        exposer (inputExposer),
-        registry (inputRegistry)
+MonitorExposer::MonitorExposer(std::string input_filename, 
+                               prometheus::Exposer& input_exposer,
+                               std::shared_ptr<prometheus::Registry> input_registry) : 
+        mapper (Mapper(input_filename)),
+        exposer (input_exposer),
+        registry (input_registry)
 {
-        mapper.registerMetrics(registry);
+        mapper.register_metrics(registry);
         exposer.RegisterCollectable(registry);
-        filename = inputFilename;
+        filename = input_filename;
         std::cout << "MonitorExposer(Processor) is created" << '\n';
         std::cout << "with mapping filename: " << filename << '\n'; 
         std::cout << "____________________________________" << '\n';
@@ -95,11 +95,11 @@ void MonitorExposer::on_data_available(rti::routing::processor::Route &route)
         if (sample.info().valid()) { 
             // output_data_ = sample.data();
             // mapper.updateMetrics((output_data_.get()));
-            mapper.updateMetrics(sample.data(), sample.info());
+            mapper.update_metrics(sample.data(), sample.info());
         } else {
             // output_data_ = sample.data();
             // mapper.updateMetrics((output_data_.get()));
-            mapper.updateMetrics(sample.data(), sample.info());
+            mapper.update_metrics(sample.data(), sample.info());
         }
     }
     std::cout << "____________________________________" << '\n';
@@ -122,8 +122,8 @@ rti::routing::processor::Processor *MonitorProcessorPlugin::create_processor(
         rti::routing::processor::Route &,
         const rti::routing::PropertySet &properties)
 {
-    const std::string propertyName = "mapping"; 
-    std::string filename = properties.find(propertyName)->second;
+    const std::string property_name = "mapping"; 
+    std::string filename = properties.find(property_name)->second;
     return new MonitorExposer(filename, exposer, registry);
 }
 

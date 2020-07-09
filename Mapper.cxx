@@ -53,14 +53,14 @@ struct convert<map<string, string>> {
 }
 
 //---------FamilyConfig---------------------------------------------------------------------------------
-FamilyConfig::FamilyConfig(MetricType iType, string iName, string iHelp, 
-string iDataPath, map<string, string> iLabels, unsigned long num) : 
-            type (iType),
-            name (iName),
-            help (iHelp),
-            labels (iLabels),
-            numMetrics (num),
-            dataPath (iDataPath)
+FamilyConfig::FamilyConfig(MetricType i_type, string i_name, string i_help, 
+string i_data_path, map<string, string> i_labels, unsigned long num) : 
+            type (i_type),
+            name (i_name),
+            help (i_help),
+            labels (i_labels),
+            num_metrics (num),
+            data_path (i_data_path)
 {
 
 }
@@ -71,33 +71,33 @@ FamilyConfig::~FamilyConfig() {}
 //---------Mapper---------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------
 
-Mapper::Mapper(std::string configFile) {
-    string configFilename = "../";
-    configFilename.append(configFile);
-    YAML::Node topic = YAML::LoadFile(configFilename);
+Mapper::Mapper(std::string config_file) {
+    string config_filename = "../";
+    config_filename.append(config_file);
+    YAML::Node topic = YAML::LoadFile(config_filename);
     YAML::Node config = topic["Topic"];
     if (config.IsNull()) {
-        throw YAML::BadFile(configFilename);
+        throw YAML::BadFile(config_filename);
     }
     
     for (YAML::const_iterator it = config["Metrics"].begin(); it != config["Metrics"].end(); ++it) {
         string name = "rti_dds_monitoring_domainParticipantEntityStatistics";
-        string dataPath = it->second["data"].as<string>();
-        name.append(boost::replace_all_copy(dataPath, ".", "_"));
+        string data_path = it->second["data"].as<string>();
+        name.append(boost::replace_all_copy(data_path, ".", "_"));
 
         MetricType type;
         if (it->second["type"]) {
-            type = whatType(it->second["type"].as<string>());
+            type = what_type(it->second["type"].as<string>());
         } else {
             type = MetricType::Gauge;
         }
 
         string help = it->second["description"].as<string>();
         // TODO-- get key member before getting sample!?
-        map<string, string> labelsMap = {{"key", "Member ID"}}; 
+        map<string, string> labels_map = {{"key", "Member_ID"}}; 
 
-        FamilyConfig* famConfig = new FamilyConfig(type, name, help, dataPath, labelsMap, 0);
-        configMap[name] = famConfig;
+        FamilyConfig* fam_config = new FamilyConfig(type, name, help, data_path, labels_map, 0);
+        config_map[name] = fam_config;
     }
 }
 
@@ -106,10 +106,10 @@ Mapper::Mapper(std::string configFile) {
  * configMap (map<string, FamilyConfig*>)
  */ 
 Mapper::~Mapper() {
-     for (map<string, FamilyConfig*>::iterator it = configMap.begin(); it != configMap.end(); ++it) {
+     for (map<string, FamilyConfig*>::iterator it = config_map.begin(); it != config_map.end(); ++it) {
          delete it->second;
      }
-     configMap.clear();
+     config_map.clear();
 }
 
 /*
@@ -117,9 +117,9 @@ Mapper::~Mapper() {
 *   - Seqence
 *   - Evolving Extendable type
 */
-void Mapper::registerMetrics(std::shared_ptr<Registry> registry) {
+void Mapper::register_metrics(std::shared_ptr<Registry> registry) {
     // call_on_data_avaialable_total is default metric
-    Family_variant temp = createFamily(MetricType::Counter, 
+    Family_variant temp = create_family(MetricType::Counter, 
                                     "call_on_data_available_total", 
                                     "How many times this processor call on_data_available()",
                                     {{"Test", "on_data_available"}}, registry);
@@ -127,17 +127,17 @@ void Mapper::registerMetrics(std::shared_ptr<Registry> registry) {
     // TODO-- get topic name this processor associate with
     adder.labels = {{"Topic", "topic name"}};
     boost::apply_visitor(adder, temp);
-    familyMap["call_on_data_available_total"] = temp;
+    family_map["call_on_data_available_total"] = temp;
 
-    for (map<string, FamilyConfig*>::const_iterator cit = configMap.begin();
-        cit != configMap.end(); ++cit) {
+    for (map<string, FamilyConfig*>::const_iterator cit = config_map.begin();
+        cit != config_map.end(); ++cit) {
         
         FamilyConfig* fam = cit->second;
         // DEBUG
         std::cout << "fam->name: " << fam->name << endl;
-        std::cout << "fam->numMetrics: " << fam->numMetrics << endl;
-        temp = createFamily(fam, registry);
-        familyMap[fam->name] = temp;
+        std::cout << "fam->numMetrics: " << fam->num_metrics << endl;
+        temp = create_family(fam, registry);
+        family_map[fam->name] = temp;
     }
 }
 
@@ -147,7 +147,7 @@ void Mapper::registerMetrics(std::shared_ptr<Registry> registry) {
 * Return: Family<T>* for T = Counter, Gauge, Histogram, or Summary
 * and return boost::blank if fail
 */
-Family_variant Mapper::createFamily(MetricType type, string name, string detail, 
+Family_variant Mapper::create_family(MetricType type, string name, string detail, 
                        const map<string, string>& labels, std::shared_ptr<Registry> registry) {
     switch(type){
         case MetricType::Counter:
@@ -163,8 +163,8 @@ Family_variant Mapper::createFamily(MetricType type, string name, string detail,
     }
 }
 
-Family_variant Mapper::createFamily(FamilyConfig* famConfig, std::shared_ptr<Registry> registry) {
-    return createFamily(famConfig->type, famConfig->name, famConfig->help, famConfig->labels, registry);
+Family_variant Mapper::create_family(FamilyConfig* famConfig, std::shared_ptr<Registry> registry) {
+    return create_family(famConfig->type, famConfig->name, famConfig->help, famConfig->labels, registry);
 }
 
 /* 
@@ -172,7 +172,7 @@ Family_variant Mapper::createFamily(FamilyConfig* famConfig, std::shared_ptr<Reg
 *  based on sting TYPE given
 *  Return: MetricType 
 */
-MetricType Mapper::whatType(std::string type) {
+MetricType Mapper::what_type(std::string type) {
     if (boost::iequals(type, "counter")) {
         return MetricType::Counter;
     } else if (boost::iequals(type, "gauge")) {
@@ -193,7 +193,7 @@ MetricType Mapper::whatType(std::string type) {
 *  Utility function to get data from a sample
 *  Return: double 
 */
-double Mapper::getData(const dds::core::xtypes::DynamicData& data, string path) {
+double Mapper::get_data(const dds::core::xtypes::DynamicData& data, string path) {
     std::vector<string> results;
     boost::split(results, path, [](char c){return c == '.';});
     DynamicData temp = data;
@@ -208,24 +208,24 @@ double Mapper::getData(const dds::core::xtypes::DynamicData& data, string path) 
 }
 
 
-int Mapper::updateMetrics(const dds::core::xtypes::DynamicData& data, 
+int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data, 
 const dds::sub::SampleInfo& info) {
     Family<Counter>* counter_fam = 
-        boost::get<Family<Counter>*>(familyMap["call_on_data_available_total"]);
+        boost::get<Family<Counter>*>(family_map["call_on_data_available_total"]);
     Counter& counter = counter_fam->Add({{"Topic", "topic name"}});
     counter.Increment();
 
-    for (map<string, FamilyConfig*>::const_iterator cit = configMap.begin(); cit != configMap.end(); ++cit) {
+    for (map<string, FamilyConfig*>::const_iterator cit = config_map.begin(); cit != config_map.end(); ++cit) {
        
-        string dataPath = cit->second->dataPath;
+        string data_path = cit->second->data_path;
         double var;
         try{
-            var = Mapper::getData(data, dataPath);
+            var = Mapper::get_data(data, data_path);
             // DEBUG
-            std::cout << "getData with " << dataPath;
+            std::cout << "get_data with " << data_path;
             std::cout << " return " << var << endl;
         } catch(std::exception& e) {
-            std::cout << "getData error: set to 0" << endl; 
+            std::cout << "get_data error: set to 0" << endl; 
             var = 0;
         }
         update_metric updater;
@@ -233,7 +233,7 @@ const dds::sub::SampleInfo& info) {
         std::stringstream ss;
         ss << info.instance_handle();
         updater.labels = {{"Instance_ID", ss.str()}} ;
-        boost::apply_visitor(updater, familyMap[cit->first]);
+        boost::apply_visitor(updater, family_map[cit->first]);
     }
 
     return 1;

@@ -64,7 +64,7 @@ struct FamilyConfig {
      * path to targeted value in DDS Sample 
      * each level seperate by "."
      */ 
-    string dataPath;
+    string data_path;
 
     /**
      * starter labels of this family
@@ -73,7 +73,7 @@ struct FamilyConfig {
     std::map<std::string, std::string> labels;
 
     /// number of metrics this family contains
-    unsigned long numMetrics;
+    unsigned long num_metrics;
 
     /**
      * @param I_TYPE type of this family, I_NAME name of this family,
@@ -82,8 +82,8 @@ struct FamilyConfig {
      *        I_DATA_PATH path to value this metric expose
      *        NUM number of metrics this family contained  
      */ 
-    FamilyConfig(MetricType iType, string iName, string iHelp, 
-                string iDataPath, map<string, string> iLabels,
+    FamilyConfig(MetricType i_type, string i_name, string i_help, 
+                string i_data_path, map<string, string> i_labels,
                 unsigned long num);
 
     ~FamilyConfig();
@@ -122,7 +122,7 @@ class Mapper {
          * 
          * @param CONFIG_FILE as path to .yml file which specify how to make metrics
          */
-        Mapper(std::string configFile);
+        Mapper(std::string config_file);
 
         ~Mapper();
 
@@ -132,7 +132,7 @@ class Mapper {
          *  
          * @param REGISTRY to register Family to
          */
-        void registerMetrics(std::shared_ptr<Registry> registry);
+        void register_metrics(std::shared_ptr<Registry> registry);
 
         /** 
          *  Uppon receiving samples (on_data_available) processor 
@@ -141,7 +141,7 @@ class Mapper {
          * @param DATA the DDS sample
          * @return 1 if success, 0 otherwise
          */
-        int updateMetrics(const dds::core::xtypes::DynamicData&, const dds::sub::SampleInfo&);
+        int update_metrics(const dds::core::xtypes::DynamicData&, const dds::sub::SampleInfo&);
 
         /**
          *  Utility function to determine type of metric 
@@ -150,7 +150,7 @@ class Mapper {
          * @param TYPE string depicting type
          * @return MetricType (prometheus::Counter, Gauge, Histogram, Summary)
          */
-        static MetricType whatType(std::string type);
+        static MetricType what_type(std::string type);
 
         /**
          *  Utility function to retrive value from DATA sample
@@ -160,7 +160,7 @@ class Mapper {
          *        PATH path to target value, divided by ":" in each level
          *              left to right.  
          */
-        static double getData(const dds::core::xtypes::DynamicData& data, string path); 
+        static double get_data(const dds::core::xtypes::DynamicData& data, string path); 
     private:
         /*
         * map which keeps track of metric Family created
@@ -172,7 +172,7 @@ class Mapper {
         *   based on ymal file.
         *   NOTE: boost::vairant instead of std::variant for older c++ version
         */
-        map<string, Family_variant> familyMap;
+        map<string, Family_variant> family_map;
 
         /*
         * map that keeps track of configuration 
@@ -180,16 +180,16 @@ class Mapper {
         * away from the logic of mapping.
         * Act as YAML file in a way
         */
-        map<string, FamilyConfig*> configMap;
+        map<string, FamilyConfig*> config_map;
 
         /*
         * Create and register a family of METRIC_TYPE with name NAME,
         * helpful description of DETAIL, starter labels LABELS, and 
         * register it to REGISTRY
         */ 
-        Family_variant createFamily(MetricType, string name, string detail, 
+        Family_variant create_family(MetricType, string name, string detail, 
                         const map<string, string>& labels, shared_ptr<Registry> registry);
-        Family_variant createFamily(FamilyConfig*, shared_ptr<Registry>);
+        Family_variant create_family(FamilyConfig*, shared_ptr<Registry>);
 
 
 };
