@@ -61,7 +61,7 @@ MonitorExposer::MonitorExposer(std::string input_filename,
         exposer (input_exposer),
         registry (input_registry)
 {
-        mapper.register_metrics(registry);
+        // mapper.register_metrics(registry);
         exposer.RegisterCollectable(registry);
         filename = input_filename;
         std::cout << "MonitorExposer(Processor) is created" << '\n';
@@ -81,7 +81,16 @@ void MonitorExposer::on_input_enabled(
     // be the type the input as well as the two outputs. Hence we can use
     // the input type to initialize the output data buffer
     output_data_ = input.get<DynamicData>().create_data();
+    DynamicType* topic_type = static_cast<dds::core::xtypes::DynamicType*>
+                                (input.stream_info().type_info().type_representation());
+
+    string name = topic_type->name();
+    name.append("_");
+    FamilyConfig fam_config(MetricType::Gauge, name, "", "", TypeKind::INT_32_TYPE, {}, 0);
+    //mapper.auto_map(*topic_type, fam_config);
+    mapper.register_metrics(registry);
     std::cout << "MonitorExposer::on_input_enabled is called." << '\n';
+    std::cout << "topic_type of " << topic_type->name() << endl;
     std::cout << "____________________________________" << '\n';
 }
 

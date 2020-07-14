@@ -6,6 +6,9 @@
 #include <dds/core/Optional.hpp>
 #include <dds/core/xtypes/DynamicData.hpp>
 #include <dds/core/xtypes/StructType.hpp>
+#include <dds/core/xtypes/UnionType.hpp>
+#include <dds/core/xtypes/MemberType.hpp>
+#include <dds/core/xtypes/AliasType.hpp>
 #include <rti/routing/processor/Processor.hpp>
 #include <rti/routing/processor/ProcessorPlugin.hpp>
 
@@ -50,17 +53,54 @@ struct convert<map<string, string>> {
         return true;
     }
 };
+
+template<>
+struct convert<string*> {
+    static Node encode(const string* &string_array) {
+        YAML::Node node;
+        node = YAML::Load("[]");
+        for (int i = 0; i < string_array->size(); ++i) {
+            node.push_back(string_array[i]);
+        }
+        return node;
+    }
+
+    static bool decode(const Node &node, string* list) {
+        if (!node.IsSequence()) {
+            return false;
+        }
+        string temp[node.size()];
+        for (int i = 0; i < node.size(); ++i) {
+            temp[i] = node[i].as<string>();
+        }
+        list = temp;
+        return true;
+    }
+}; 
 }
 
 //---------FamilyConfig---------------------------------------------------------------------------------
 FamilyConfig::FamilyConfig(MetricType i_type, string i_name, string i_help, 
-string i_data_path, map<string, string> i_labels, unsigned long num) : 
+string i_data_path, TypeKind i_data_type, map<string, string> i_labels, unsigned long num) : 
             type (i_type),
             name (i_name),
             help (i_help),
+            data_type (i_data_type),
             labels (i_labels),
             num_metrics (num),
             data_path (i_data_path)
+{
+
+}
+
+FamilyConfig::FamilyConfig(const FamilyConfig& fam_config) :
+    type (fam_config.type),
+    name (fam_config.name),
+    help (fam_config.help),
+    data_type (fam_config.data_type),
+    labels (fam_config.labels),
+    num_metrics (fam_config.num_metrics),
+    data_path (fam_config.data_path)
 {
 
 }
@@ -70,7 +110,7 @@ FamilyConfig::~FamilyConfig() {}
 //------------------------------------------------------------------------------------------------
 //---------Mapper---------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------
-
+// Deal with Configuration file
 Mapper::Mapper(std::string config_file) {
     string config_filename = "../";
     config_filename.append(config_file);
@@ -80,8 +120,14 @@ Mapper::Mapper(std::string config_file) {
         throw YAML::BadFile(config_filename);
     }
     
+    if (config["ignore"].IsSequence()) {
+        ignore_list = config["ignore"].as<string*>();
+    } else {
+        ignore_list = NULL;
+    }
+
     for (YAML::const_iterator it = config["Metrics"].begin(); it != config["Metrics"].end(); ++it) {
-        string name = "rti_dds_monitoring_domainParticipantEntityStatistics";
+        string name = "rti_dds_monitoring_domainParticipantEntityStatistics_";
         string data_path = it->second["data"].as<string>();
         name.append(boost::replace_all_copy(data_path, ".", "_"));
 
@@ -96,7 +142,7 @@ Mapper::Mapper(std::string config_file) {
         // TODO-- get key member before getting sample!?
         map<string, string> labels_map = {{"key", "Member_ID"}}; 
 
-        FamilyConfig* fam_config = new FamilyConfig(type, name, help, data_path, labels_map, 0);
+        FamilyConfig* fam_config = new FamilyConfig(type, name, help, data_path, TypeKind::INT_64_TYPE, labels_map, 0);
         config_map[name] = fam_config;
     }
 }
@@ -110,6 +156,88 @@ Mapper::~Mapper() {
          delete it->second;
      }
      config_map.clear();
+}
+
+void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyConfig config) {
+    TypeKind kind = topic_type.kind();
+    switch (kind) {
+    case TypeKind::PRIMITIVE_TYPE: {
+        if (kind == TypeKind::BOOLEAN_TYPE 
+        || kind == TypeKind::CHAR_8_TYPE
+        || kind == TypeKind::UINT_8_TYPE) {
+            // Not mappable
+            break;
+        } else {
+            config.data_type = kind;
+        }
+        config_map[config.name] = &config;
+    }
+        break;
+    case TypeKind::UNION_TYPE: {
+        const UnionType& union_type =
+                static_cast<const UnionType&> (topic_type);
+        for (int i = 0; i < union_type.member_count(); ++i) {
+            const UnionMember& member = union_type.member(i); 
+            FamilyConfig new_config(config);
+            new_config.name.append(member.name());
+            new_config.name.append("_");
+            new_config.data_path.append(member.name());
+            new_config.data_path.append(".");
+            auto_map(member.type(), new_config);
+        }
+    }
+        break;
+    case TypeKind::STRUCTURE_TYPE: {
+        const StructType& struct_type =
+                static_cast<const StructType&> (topic_type);
+        for (int i = 0; i < struct_type.member_count(); ++i) {
+            const Member& member = struct_type.member(i);
+            if (member.is_key()) {
+                // data path to this member 
+                // TODO-- check 
+                // assuming key members always at the top
+                string data_path = config.data_path;
+                data_path.append(member.name());
+                config.labels[member.name()] = data_path;
+            } else {
+                FamilyConfig new_config(config);
+                new_config.name.append(member.name());
+                new_config.name.append("_");
+                new_config.data_path.append(member.name());
+                new_config.data_path.append(".");
+                auto_map(member.type(), new_config);
+            }
+        }
+    }
+        break;
+    case TypeKind::ARRAY_TYPE: {
+        const ArrayType& array_type =
+                static_cast<const ArrayType &>(topic_type);
+
+        FamilyConfig new_config(config);
+        // how to access array element from DynamicData
+        // LoanedDynamicData or vector<>
+        new_config.data_path.append("[].");
+        auto_map(array_type.content_type(), new_config);
+    }
+        break;
+    case TypeKind::SEQUENCE_TYPE: {
+        const SequenceType& seq_type = 
+                static_cast<const SequenceType &>(topic_type);
+                
+        FamilyConfig new_config(config);
+        new_config.data_path.append("[].");
+        auto_map(seq_type.content_type(), new_config);
+    }
+        break;
+    case TypeKind::ALIAS_TYPE: {
+        const AliasType& alias_type =
+                static_cast<const AliasType &>(topic_type);
+        FamilyConfig new_config(config);
+        auto_map(resolve_alias(alias_type), new_config);
+    }
+        break;
+    }
 }
 
 /*
@@ -193,13 +321,33 @@ MetricType Mapper::what_type(std::string type) {
 *  Utility function to get data from a sample
 *  Return: double 
 */
-double Mapper::get_data(const dds::core::xtypes::DynamicData& data, string path) {
+double Mapper::get_data(const dds::core::xtypes::DynamicData& data, string path, TypeKind kind) {
     std::vector<string> results;
     boost::split(results, path, [](char c){return c == '.';});
     DynamicData temp = data;
     for (int i = 0; i < results.size(); ++i) {
         if (i == results.size()-1) {
-            return (double) temp.value<int64_t>(results[i]);
+            if (kind == TypeKind::INT_16_TYPE ) {
+                return (double) temp.value<int16_t>(results[i]);
+            } else if (kind == TypeKind::UINT_16_TYPE) {
+                return (double) temp.value<uint16_t>(results[i]);
+            } else if (kind == TypeKind::INT_32_TYPE) {
+                return (double) temp.value<int32_t>(results[i]);
+            } else if (kind == TypeKind::UINT_32_TYPE) {
+                return (double) temp.value<uint32_t>(results[i]);
+            } else if (kind == TypeKind::INT_64_TYPE) {
+                return (double) temp.value<int64_t>(results[i]);
+            } else if (kind == TypeKind::UINT_64_TYPE) {
+                return (double) temp.value<uint64_t>(results[i]);
+            } else if (kind == TypeKind::FLOAT_32_TYPE) {
+                return (double) temp.value<float>(results[i]);
+            } else if (kind == TypeKind::FLOAT_64_TYPE) {
+                return temp.value<double>(results[i]);
+            } else if (kind == TypeKind::FLOAT_128_TYPE) {
+                return (double) temp.value<rti::core::LongDouble>(results[i]);
+            } else {
+                return (double) temp.value<int>(results[i]);
+            }
         }
         temp = temp.value<DynamicData>(results[i]);
     }
@@ -218,9 +366,10 @@ const dds::sub::SampleInfo& info) {
     for (map<string, FamilyConfig*>::const_iterator cit = config_map.begin(); cit != config_map.end(); ++cit) {
        
         string data_path = cit->second->data_path;
+        TypeKind data_type = cit->second->data_type;
         double var;
         try{
-            var = Mapper::get_data(data, data_path);
+            var = Mapper::get_data(data, data_path, data_type);
             // DEBUG
             std::cout << "get_data with " << data_path;
             std::cout << " return " << var << endl;

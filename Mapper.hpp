@@ -39,6 +39,8 @@
 
 using namespace std;
 using namespace prometheus;
+using namespace dds::core::xtypes;
+
 
 /**
  *   Represent a YAML Node contains all nessesary information to 
@@ -67,6 +69,10 @@ struct FamilyConfig {
     string data_path;
 
     /**
+     * type of data that data_path lead to 
+     */
+    TypeKind data_type;
+    /**
      * starter labels of this family
      * They will appear in all metrics of this family  
      */ 
@@ -83,8 +89,10 @@ struct FamilyConfig {
      *        NUM number of metrics this family contained  
      */ 
     FamilyConfig(MetricType i_type, string i_name, string i_help, 
-                string i_data_path, map<string, string> i_labels,
-                unsigned long num);
+                string i_data_path, TypeKind i_data_type, 
+                map<string, string> i_labels, unsigned long num);
+
+    FamilyConfig(const FamilyConfig&);
 
     ~FamilyConfig();
 };      
@@ -126,6 +134,12 @@ class Mapper {
 
         ~Mapper();
 
+        /**
+         *  Auto map all primative members of TYPE
+         *  @param TYPE DynamicType to create metrics from
+         */
+        void auto_map(const dds::core::xtypes::DynamicType&, FamilyConfig);
+
         /** 
          *  Mapper will create a /metric based on config FILENAME 
          *  Then register it to the one and only REGISTRY 
@@ -160,7 +174,7 @@ class Mapper {
          *        PATH path to target value, divided by ":" in each level
          *              left to right.  
          */
-        static double get_data(const dds::core::xtypes::DynamicData& data, string path); 
+        static double get_data(const dds::core::xtypes::DynamicData&, string, TypeKind); 
     private:
         /*
         * map which keeps track of metric Family created
@@ -173,6 +187,11 @@ class Mapper {
         *   NOTE: boost::vairant instead of std::variant for older c++ version
         */
         map<string, Family_variant> family_map;
+
+        /*
+        * keep members that will be ignore from mapping process
+        */
+        string* ignore_list; 
 
         /*
         * map that keeps track of configuration 
