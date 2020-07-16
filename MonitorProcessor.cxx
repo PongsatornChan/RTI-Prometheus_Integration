@@ -86,7 +86,7 @@ void MonitorExposer::on_input_enabled(
 
     string name = topic_type->name();
     name.append("_");
-    FamilyConfig fam_config(MetricType::Gauge, name, "", "", TypeKind::INT_32_TYPE, {}, 0);
+    FamilyConfig fam_config(name, "");
     //mapper.auto_map(*topic_type, fam_config);
     mapper.register_metrics(registry);
     std::cout << "MonitorExposer::on_input_enabled is called." << '\n';

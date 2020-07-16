@@ -73,10 +73,15 @@ struct FamilyConfig {
      */
     TypeKind data_type;
     /**
-     * starter labels of this family
-     * They will appear in all metrics of this family  
+     * label name of the name of keyed member
+     * label value of data_path to that member  
      */ 
-    std::map<std::string, std::string> labels;
+    std::map<std::string, std::string> key_map;
+    /**
+     * label name of the name of the array of sequence
+     * label value of data_path to that member
+     */
+    std::map<std::string, std::string> collection_map;
 
     /// number of metrics this family contains
     unsigned long num_metrics;
@@ -88,9 +93,13 @@ struct FamilyConfig {
      *        I_DATA_PATH path to value this metric expose
      *        NUM number of metrics this family contained  
      */ 
-    FamilyConfig(MetricType i_type, string i_name, string i_help, 
-                string i_data_path, TypeKind i_data_type, 
-                map<string, string> i_labels, unsigned long num);
+    FamilyConfig(string i_name, string i_help,
+                MetricType i_type=MetricType::Gauge, 
+                string i_data_path="",
+                TypeKind i_data_type=TypeKind::FLOAT_64_TYPE, 
+                map<string, string> i_key_map={}, 
+                map<string, string> i_collection_map={}, 
+                unsigned long num=0);
 
     FamilyConfig(const FamilyConfig&);
 
@@ -174,7 +183,8 @@ class Mapper {
          *        PATH path to target value, divided by ":" in each level
          *              left to right.  
          */
-        static double get_data(const dds::core::xtypes::DynamicData&, string, TypeKind); 
+        static double get_value(const dds::core::xtypes::DynamicData&, vector<string>, TypeKind); 
+        static void get_data(vector<map<string, string>>*, vector<double>*, const dds::core::xtypes::DynamicData&, FamilyConfig);
     private:
         /*
         * map which keeps track of metric Family created
