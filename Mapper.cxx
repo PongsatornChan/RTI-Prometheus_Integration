@@ -165,7 +165,7 @@ Mapper::~Mapper() {
      }
      config_map.clear();
 }
-
+// ignore list
 void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyConfig config) {
     TypeKind kind = topic_type.kind();
     switch (kind.underlying()) {
@@ -191,6 +191,11 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
             new_config.name.append("_");
             new_config.data_path.append(member.name());
             new_config.data_path.append(".");
+            for (string s: ignore_list) {
+                if (new_config.data_path.find(s) != string::npos) {
+                    return;
+                }
+            }
             auto_map(member.type(), new_config);
         }
     }
@@ -213,6 +218,11 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
                 new_config.name.append("_");
                 new_config.data_path.append(member.name());
                 new_config.data_path.append(".");
+                for (string s: ignore_list) {
+                if (new_config.data_path.find(s) != string::npos) {
+                    return;
+                }
+            }
                 auto_map(member.type(), new_config);
             }
         }
@@ -228,7 +238,6 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
         std::vector<string> results;
         boost::split(results, new_config->data_path, [](char c){return c == '.';});
         new_config.collection_map[results.end()] = new_config.data_path;
-        new_config.data_path.append("[].");
         auto_map(array_type.content_type(), new_config);
     }
         break;
@@ -237,7 +246,6 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
                 static_cast<const SequenceType &>(topic_type);
                 
         FamilyConfig new_config(config);
-        new_config.data_path.append("[].");
         auto_map(seq_type.content_type(), new_config);
     }
         break;
@@ -413,7 +421,7 @@ void Mapper:get_data(vector<map<string, string>>* set_labels, vector<double>* va
             boost::split(path_key, str_path_key, [](char c){return c == '.';});
             string str_rep = get_string(data, path_key);
             key_labels[cit->first] = str_rep;
-        }
+        }    
         set_labels->push_back(key_labels);
 
         // value
@@ -430,8 +438,9 @@ void Mapper:get_data(vector<map<string, string>>* set_labels, vector<double>* va
 
         // get key labels before list
         map<string, string> key_labels = {};
-        for (map<string, string>::const_iterator cit = config.key_map.begin();
-        cit != config.key_map.end(); ++cit) {
+        // key_map for recursive 
+        map<string, string> new_key_map = config.key_map;
+        for (map<string, string>::const_iterator cit = config.key_map.begin(); cit != config.key_map.end(); ++cit) {
             std::vector<string> path_key;
             string str_path_key = cit->second;
             boost::split(path_key, str_path_key, [](char c){return c == '.';});
@@ -440,13 +449,60 @@ void Mapper:get_data(vector<map<string, string>>* set_labels, vector<double>* va
             if (path_key.size() < path_list.size()) {
                 string str_rep = get_string(data, path_key);
                 key_labels[cit->first] = str_rep;
+                new_key_map.erase(cit->first);
             } else {
                 // stop when key is a member of element of list
                 break;
             }
         }
-        // modify config
-        // recursice on all element in the list
+
+        // TODO modify config
+        FamilyConfig new_config(config);
+        // only the unseen keys
+        new_config.key_map = new_key_map;
+        for (map<string, string>::const_iterator cit = new_config.key_map.begin(); cit != new_config.key_map.end(); ++cit) {
+            cit->second.erase(0, str_path_list.length() + 1);
+        }
+        // recursively call on members of the first list
+        new_config.collection_map.erase(config.collection_map.begin()->first);
+        for (map<string, string>::const_iterator cit = new_config.collection_map.begin(); cit != new_config.collection_map.end(); ++cit) {
+            cit->second.erase(0, str_path_list.length() + 1);
+        }
+        new_config.data_path.erase(0, str_path_list.length() + 1);
+        // Traverse to list
+        DynamicData temp = data;
+        try {
+            // traverse to the array or sequence parent
+            for (int i = 0; i < path_list.size() - 1; ++i) {
+                temp = temp.value<DynamicData>(path_list[i]);
+            }
+            string name_list = path_list[path_list.size()];
+            vector<DynamicData> vec = temp.get_values<DynamicData>(name_list);
+            name_list.append("_index");
+            // recursice on all element in the list
+            for (int i = 0; i < vec.size(); ++i) {
+                // assume vector can contain multiple empty maps
+                vector<map<string, string>> recur_set_labels = {};
+                vector<double> recur_vars = {};
+                get_data(&recur_set_labels, &recur_vars, vec[i], new_config);
+                // append parent key labels to the each child labels
+                for (int j = 0; j < recur_set_labels.size(); ++j) {
+                    recur_set_labels[j].insert(key_labels.begin(), key_labels.end());
+                    recur_set_labels[j][name_list] = to_string(i);
+                }
+                // DEBUG
+                if (recur_set_labels.size() != recur_vars.size()) {
+                    cout << "labels not match values. ABORT!" << endl;
+                    throw new dds::core::Error("labels not match values");
+                }
+                set_labels->insert(set_labels->end(), recur_set_labels.begin(), recur_set_labels.end());
+                vars->insert(vars->end(), recur_vars.begin(), recur_vars.end());
+            }
+
+        } catch (dds::core::Exception e) {
+            cout << "Traverse fail" << path_list << endl;
+        }
+        
     }
 }
 
