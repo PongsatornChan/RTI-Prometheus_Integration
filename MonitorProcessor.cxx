@@ -61,8 +61,6 @@ MonitorExposer::MonitorExposer(std::string input_filename,
         exposer (input_exposer),
         registry (input_registry)
 {
-        // mapper.register_metrics(registry);
-        exposer.RegisterCollectable(registry);
         filename = input_filename;
         std::cout << "MonitorExposer(Processor) is created" << '\n';
         std::cout << "with mapping filename: " << filename << '\n'; 
@@ -83,15 +81,22 @@ void MonitorExposer::on_input_enabled(
     output_data_ = input.get<DynamicData>().create_data();
     DynamicType* topic_type = static_cast<dds::core::xtypes::DynamicType*>
                                 (input.stream_info().type_info().type_representation());
-
-    string name = topic_type->name();
-    name.append("_");
-    FamilyConfig fam_config(name, "");
-    //mapper.auto_map(*topic_type, fam_config);
-    mapper.register_metrics(registry);
     std::cout << "MonitorExposer::on_input_enabled is called." << '\n';
     std::cout << "topic_type of " << topic_type->name() << endl;
     std::cout << "____________________________________" << '\n';
+
+    string name = topic_type->name();
+    name = boost::replace_all_copy(name, "::", "_");
+    mapper.provide_name(name);    
+    if (mapper.is_auto_mapping()) {
+        name.append("_");
+        FamilyConfig fam_config(name, "");
+        mapper.auto_map(*topic_type, fam_config);
+        std::cout << "Auto_mapping no no" << endl;
+    } 
+    std::cout << "register metrics...." << endl;
+    mapper.register_metrics(registry);
+    exposer.RegisterCollectable(registry);
 }
 
 void MonitorExposer::on_data_available(rti::routing::processor::Route &route)

@@ -55,25 +55,23 @@ struct convert<map<string, string>> {
 };
 
 template<>
-struct convert<string*> {
-    static Node encode(const string* &string_array) {
+struct convert<vector<string>> {
+    static Node encode(const vector<string> &string_array) {
         YAML::Node node;
         node = YAML::Load("[]");
-        for (int i = 0; i < string_array->size(); ++i) {
+        for (int i = 0; i < string_array.size(); ++i) {
             node.push_back(string_array[i]);
         }
         return node;
     }
 
-    static bool decode(const Node &node, string* list) {
+    static bool decode(const Node &node, vector<string> list) {
         if (!node.IsSequence()) {
             return false;
         }
-        string temp[node.size()];
         for (int i = 0; i < node.size(); ++i) {
-            temp[i] = node[i].as<string>();
+            list.push_back(node[i].as<string>());
         }
-        list = temp;
         return true;
     }
 }; 
@@ -127,14 +125,19 @@ Mapper::Mapper(std::string config_file) {
         throw YAML::BadFile(config_filename);
     }
     
+    config_map = {};
     if (config["ignore"].IsSequence()) {
-        ignore_list = config["ignore"].as<string*>();
+        ignore_list = config["ignore"].as<vector<string>>();
     } else {
-        ignore_list = NULL;
+        ignore_list = {};
     }
+    family_map = {};
 
+    is_auto_map = true;
+    // TODO mapping with list and key
     for (YAML::const_iterator it = config["Metrics"].begin(); it != config["Metrics"].end(); ++it) {
-        string name = "rti_dds_monitoring_domainParticipantEntityStatistics_";
+        is_auto_map = false;
+        string name = "";
         string data_path = it->second["data"].as<string>();
         name.append(boost::replace_all_copy(data_path, ".", "_"));
 
@@ -147,7 +150,7 @@ Mapper::Mapper(std::string config_file) {
 
         string help = it->second["description"].as<string>();
         // TODO-- get key member before getting sample!?
-        map<string, string> labels_map = {{"key", "Member_ID"}}; 
+        map<string, string> labels_map = {}; 
 
         FamilyConfig* fam_config = new FamilyConfig(name, help, type, data_path, 
                                     TypeKind::INT_64_TYPE, labels_map, {}, 0);
@@ -165,8 +168,19 @@ Mapper::~Mapper() {
      }
      config_map.clear();
 }
-// ignore list
+
 void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyConfig config) {
+    for (int i = 0; i < ignore_list.size(); ++i) {
+        if (config.data_path.find(ignore_list[i]) != string::npos) {
+            return;
+        }
+    }
+    // statisticVaraible direct alias to mean of StatisticMetric
+    if (topic_type.name().compare("StatisticVariable") == 0) {
+        config.data_path.append("publication_period_metrics.mean");
+        config_map[config.name] = &config;
+        return;
+    }
     TypeKind kind = topic_type.kind();
     switch (kind.underlying()) {
     case TypeKind::PRIMITIVE_TYPE: {
@@ -191,11 +205,6 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
             new_config.name.append("_");
             new_config.data_path.append(member.name());
             new_config.data_path.append(".");
-            for (string s: ignore_list) {
-                if (new_config.data_path.find(s) != string::npos) {
-                    return;
-                }
-            }
             auto_map(member.type(), new_config);
         }
     }
@@ -218,11 +227,6 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
                 new_config.name.append("_");
                 new_config.data_path.append(member.name());
                 new_config.data_path.append(".");
-                for (string s: ignore_list) {
-                if (new_config.data_path.find(s) != string::npos) {
-                    return;
-                }
-            }
                 auto_map(member.type(), new_config);
             }
         }
@@ -236,8 +240,8 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
         // how to access array element from DynamicData
         // LoanedDynamicData or vector<>
         std::vector<string> results;
-        boost::split(results, new_config->data_path, [](char c){return c == '.';});
-        new_config.collection_map[results.end()] = new_config.data_path;
+        boost::split(results, new_config.data_path, [](char c){return c == '.';});
+        new_config.collection_map[results.back()] = new_config.data_path;
         auto_map(array_type.content_type(), new_config);
     }
         break;
@@ -246,6 +250,9 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
                 static_cast<const SequenceType &>(topic_type);
                 
         FamilyConfig new_config(config);
+        std::vector<string> results;
+        boost::split(results, new_config.data_path, [](char c){return c == '.';});
+        new_config.collection_map[results.back()] = new_config.data_path;
         auto_map(seq_type.content_type(), new_config);
     }
         break;
@@ -262,6 +269,23 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
     
 }
 
+void Mapper::provide_name(string name) {
+    topic_name = name;
+    map<string, FamilyConfig*> new_config_map = {};
+    if (!is_auto_mapping()) {
+        for (map<string, FamilyConfig*>::iterator it = config_map.begin(); 
+        it != config_map.end(); ++it)
+        {
+            string new_name = name;
+            new_name.append("_");
+            new_name.append(it->second->name);
+            it->second->name = new_name;
+            new_config_map[new_name] = it->second;
+        }
+    }
+    config_map = new_config_map;
+}
+
 /*
 * Limitation of current implementation:
 *   - Seqence
@@ -274,11 +298,12 @@ void Mapper::register_metrics(std::shared_ptr<Registry> registry) {
                                     "call_on_data_available_total", 
                                     "How many times this processor call on_data_available()",
                                     {{"Test", "on_data_available"}}, registry);
+
+    //DEBUG 
+    std::cout << "config size: " << config_map.size() << endl;
+
     add_metric adder;
-    // TODO-- get topic name this processor associate with
-    std::vector<string> results;
-    boost::split(results, config_map[0]->data_path, [](char c){return c == '.';});
-    adder.labels = {{"Topic", results[0]}};
+    adder.labels = {{"Topic", topic_name}};
     boost::apply_visitor(adder, temp);
     family_map["call_on_data_available_total"] = temp;
 
@@ -342,6 +367,10 @@ MetricType Mapper::what_type(std::string type) {
     }
 }
 
+bool Mapper::is_auto_mapping() {
+    return is_auto_map;
+}
+
 /* 
 *  Utility function to get data from a sample
 *  Only work with basic data with no array or sequence
@@ -375,20 +404,20 @@ double Mapper::get_value(const dds::core::xtypes::DynamicData& data, vector<stri
         }
         temp = temp.value<DynamicData>(path[i]);
     }
-    throw new std::runtime_error("can't find value in " + path);
+    throw new std::runtime_error("get_value: can't find value");
     return 0;
 }
 
 // get the string representation of keyed member at data_path
 // traverse basic data structure only 
 // Return NULL if finding array or sequence
-string Mapper:get_string(const dds::core::xtypes::DynamicData& data, vector<string> path) {
+string Mapper::get_string(const dds::core::xtypes::DynamicData& data, vector<string> path) {
     DynamicData temp = data;
     try {
         for (int i = 0; i < path.size(); ++i) {
             if (temp.is_member_key(path[i])) { 
                 TypeKind kind = temp.value<DynamicData>(path[i]).type_kind();
-                if (kind == TypeKind::PRIMATIVE_TYPE ) {
+                if (kind == TypeKind::PRIMITIVE_TYPE ) {
                     vector<string> new_path = {path[i]};
                     return to_string(get_value(temp, new_path, kind));
                 } else if (kind == TypeKind::STRING_TYPE) {
@@ -399,15 +428,15 @@ string Mapper:get_string(const dds::core::xtypes::DynamicData& data, vector<stri
             }
             temp = temp.value<DynamicData>(path[i]);
         }
-    } catch (dds::core::Exception e) {
+    } catch (std::exception e) {
         return "";
     }
-    throw new std::runtime_error("can't find value in " + path);
+    throw new std::runtime_error("get_string: can't find value");
     return 0;
 }
 
 // deal with array or sequence
-void Mapper:get_data(vector<map<string, string>>* set_labels, vector<double>* vars, 
+void Mapper::get_data(vector<map<string, string>>* set_labels, vector<double>* vars, 
                 const dds::core::xtypes::DynamicData& data, FamilyConfig config) {
     
     // no list in path (base case)
@@ -427,7 +456,7 @@ void Mapper:get_data(vector<map<string, string>>* set_labels, vector<double>* va
         // value
         std::vector<string> path_value;
         boost::split(path_value, config.data_path, [](char c){return c == '.';});
-        double var = get_value(data, path_value, config.type);
+        double var = get_value(data, path_value, config.data_type);
         vars->push_back(var);
 
     } else {
@@ -460,13 +489,13 @@ void Mapper:get_data(vector<map<string, string>>* set_labels, vector<double>* va
         FamilyConfig new_config(config);
         // only the unseen keys
         new_config.key_map = new_key_map;
-        for (map<string, string>::const_iterator cit = new_config.key_map.begin(); cit != new_config.key_map.end(); ++cit) {
-            cit->second.erase(0, str_path_list.length() + 1);
+        for (map<string, string>::iterator it = new_config.key_map.begin(); it != new_config.key_map.end(); ++it) {
+            it->second.erase(0, str_path_list.length() + 1);
         }
         // recursively call on members of the first list
         new_config.collection_map.erase(config.collection_map.begin()->first);
-        for (map<string, string>::const_iterator cit = new_config.collection_map.begin(); cit != new_config.collection_map.end(); ++cit) {
-            cit->second.erase(0, str_path_list.length() + 1);
+        for (map<string, string>::iterator it = new_config.collection_map.begin(); it != new_config.collection_map.end(); ++it) {
+            it->second.erase(0, str_path_list.length() + 1);
         }
         new_config.data_path.erase(0, str_path_list.length() + 1);
         // Traverse to list
@@ -477,14 +506,15 @@ void Mapper:get_data(vector<map<string, string>>* set_labels, vector<double>* va
                 temp = temp.value<DynamicData>(path_list[i]);
             }
             string name_list = path_list[path_list.size()];
-            vector<DynamicData> vec = temp.get_values<DynamicData>(name_list);
+            //vector<DynamicData> vec = temp.get_values<DynamicData>(name_list);
+            rti::core::xtypes::LoanedDynamicData vec = temp.loan_value(name_list);
             name_list.append("_index");
             // recursice on all element in the list
-            for (int i = 0; i < vec.size(); ++i) {
+            for (size_t i = 1; i <= vec.get().member_count(); ++i) {
                 // assume vector can contain multiple empty maps
                 vector<map<string, string>> recur_set_labels = {};
                 vector<double> recur_vars = {};
-                get_data(&recur_set_labels, &recur_vars, vec[i], new_config);
+                get_data(&recur_set_labels, &recur_vars, vec.get().loan_value(i).get(), new_config);
                 // append parent key labels to the each child labels
                 for (int j = 0; j < recur_set_labels.size(); ++j) {
                     recur_set_labels[j].insert(key_labels.begin(), key_labels.end());
@@ -499,8 +529,8 @@ void Mapper:get_data(vector<map<string, string>>* set_labels, vector<double>* va
                 vars->insert(vars->end(), recur_vars.begin(), recur_vars.end());
             }
 
-        } catch (dds::core::Exception e) {
-            cout << "Traverse fail" << path_list << endl;
+        } catch (std::exception e) {
+            cout << "get_data: DynamicData traversal fail." << endl;
         }
         
     }
@@ -514,19 +544,19 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
                            const dds::sub::SampleInfo& info) {
     Family<Counter>* counter_fam = 
         boost::get<Family<Counter>*>(family_map["call_on_data_available_total"]);
-    Counter& counter = counter_fam->Add({{"Topic", "topic name"}});
+    Counter& counter = counter_fam->Add({{"Topic", topic_name}});
     counter.Increment();
 
     for (map<string, FamilyConfig*>::const_iterator cit = config_map.begin(); cit != config_map.end(); ++cit) {
         
-        vector<map<string,string>> labels_list;
-        vector<double> vars;
+        vector<map<string,string>> labels_list = {};
+        vector<double> vars = {};
         try{
-            Mapper::get_data(&set_labels, &vars, data, (cit->second)*);
+            Mapper::get_data(&labels_list, &vars, data, *(cit->second));
             // DEBUG
-            std::cout << "get_data with " << data_path;
-            std::cout << " return " << vars << endl;
-            std::cont << " with labels set " << set_labels << endl;
+            std::cout << " return ";
+            for (int i=0;i<vars.size();++i) {cout<<vars[i];} 
+            cout << endl;
         } catch(std::exception& e) {
             std::cout << "get_data error: set to 0" << endl; 
             vars.push_back(0.0);
@@ -536,7 +566,10 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
         update_metric updater;
         for (int i = 0; i < vars.size(); ++i) {
             updater.value = vars[i];
-            if (labels_list.empty()) {
+            if (labels_list[i].empty()) {
+                // DEBUG
+                std::cout << "update_metric no key" << endl;
+                std::cout << "metric name " << cit->first << endl;
                 std::stringstream ss;
                 ss << info.instance_handle();
                 updater.labels = {{"Instance_ID", ss.str()}} ;
@@ -627,4 +660,3 @@ bool update_metric::operator()( Family<prometheus::Histogram>* operand) const {
     }
 }
 
-// TODO StatisticVariable only need mean

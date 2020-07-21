@@ -145,9 +145,23 @@ class Mapper {
 
         /**
          *  Auto map all primative members of TYPE
+         * 
          *  @param TYPE DynamicType to create metrics from
+         *         CONFIG enable recursive, contain information from 
+         *                higher level
          */
-        void auto_map(const dds::core::xtypes::DynamicType&, FamilyConfig);
+        void auto_map(const dds::core::xtypes::DynamicType& type, FamilyConfig config);
+
+        /**
+         * Call when is not auto mapping 
+         * to provide name to specify metrics config
+         * Note: because the specify configs are created at processor initailization
+         *       we don't know the name of topic yet 
+         *       so the specify configs did not contain name  
+         *  
+         * @param NAME topic name to be attached to specific config, each level divide by _
+         */
+        void provide_name(string name);
 
         /** 
          *  Mapper will create a /metric based on config FILENAME 
@@ -175,17 +189,35 @@ class Mapper {
          */
         static MetricType what_type(std::string type);
 
+        bool is_auto_mapping();
+
         /**
          *  Utility function to retrive value from DATA sample
          *  using PATH. 
          * 
          * @param DATA data from topic sample, used DynamicData as a wrap.
          *        PATH path to target value, divided by ":" in each level
-         *              left to right.  
+         *              left to right. 
+         *        TYPE TypeKind of the member data
+         * @return double value from map-able member pointed by path
          */
-        static double get_value(const dds::core::xtypes::DynamicData&, vector<string>, TypeKind); 
+        static double get_value(const dds::core::xtypes::DynamicData& data, vector<string> path, TypeKind); 
         static void get_data(vector<map<string, string>>*, vector<double>*, const dds::core::xtypes::DynamicData&, FamilyConfig);
+        
+        /**
+         *  Utility function to retrive string representation of keyed
+         *  members point to bt path
+         * 
+         *  @param DATA data from topic sample
+         *         PATH path lead to the keyed member
+         *  @return string representation of the keyed member
+         */
+        static string get_string(const dds::core::xtypes::DynamicData& data, vector<string> path);
     private:
+
+        bool is_auto_map;
+
+        string topic_name;
         /*
         * map which keeps track of metric Family created
         * KEY: name of the given metric as a key, 
@@ -201,7 +233,7 @@ class Mapper {
         /*
         * keep members that will be ignore from mapping process
         */
-        string* ignore_list; 
+        vector<string> ignore_list; 
 
         /*
         * map that keeps track of configuration 
