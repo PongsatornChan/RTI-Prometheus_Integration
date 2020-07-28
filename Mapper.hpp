@@ -202,8 +202,15 @@ class Mapper {
          * @return double value from map-able member pointed by path
          */
         static double get_value(const dds::core::xtypes::DynamicData& data, string data_path, TypeKind); 
-        static void get_data(vector<map<string, string>>*, vector<double>*, const dds::core::xtypes::DynamicData&, FamilyConfig);
         
+        /**
+         *  Utility function to determine if KIND is one of primitive kinds
+         * 
+         *  @param KIND TypeKind
+         *  @return BOOL true if KIND is one of primitive kind, false otherwise
+         */
+        static bool is_primitive_kind(TypeKind kind);
+
         /**
          *  Utility function to retrive string representation of keyed
          *  members point to bt path
@@ -212,9 +219,9 @@ class Mapper {
          *         PATH path lead to the keyed member
          *  @return string representation of the keyed member
          */
-        static void get_string_rep(map<string, string>* key_label, const dds::core::xtypes::DynamicData& data, string data_path);
+        static void get_key_labels(std::map<string, string> &key_labels, const DynamicData& data, string data_path);
 
-        static void get_key_labels(map<string, string>* key_labels, const DynamicData& data, string data_path);
+        static void get_data(vector<map<string, string>>*, vector<double>*, const dds::core::xtypes::DynamicData&, FamilyConfig);
     private:
 
         bool is_auto_map;
