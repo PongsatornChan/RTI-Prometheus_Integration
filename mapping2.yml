@@ -1,0 +1,12 @@
+Topic:
+  # only first time and never change
+  pesudo_metric: 
+    - host.id
+    - process.id
+    - host.name
+  ignore:
+    - period
+    - participant_key
+    - domain_id
+    - process_id
+    - host_id

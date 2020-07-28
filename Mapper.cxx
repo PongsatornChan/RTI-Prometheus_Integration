@@ -53,28 +53,6 @@ struct convert<map<string, string>> {
         return true;
     }
 };
-
-template<>
-struct convert<vector<string>> {
-    static Node encode(const vector<string> &string_array) {
-        YAML::Node node;
-        node = YAML::Load("[]");
-        for (int i = 0; i < string_array.size(); ++i) {
-            node.push_back(string_array[i]);
-        }
-        return node;
-    }
-
-    static bool decode(const Node &node, vector<string> list) {
-        if (!node.IsSequence()) {
-            return false;
-        }
-        for (int i = 0; i < node.size(); ++i) {
-            list.push_back(node[i].as<string>());
-        }
-        return true;
-    }
-}; 
 }
 
 //---------FamilyConfig---------------------------------------------------------------------------------
@@ -170,37 +148,59 @@ Mapper::~Mapper() {
 }
 
 void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyConfig config) {
+    //DEBUG
+    std::cout << endl << "auto mapp is called" << endl;
+    std::cout << "ignore_list size: " << ignore_list.size() << endl;
+    std::cout << "Config: " << config.data_path << endl;
     for (int i = 0; i < ignore_list.size(); ++i) {
         if (config.data_path.find(ignore_list[i]) != string::npos) {
+            //DEBUG
+            std::cout << "ignore_list " << config.data_path << endl;
             return;
         }
     }
-    // statisticVaraible direct alias to mean of StatisticMetric
-    if (topic_type.name().compare("StatisticVariable") == 0) {
-        config.data_path.append("publication_period_metrics.mean");
-        config_map[config.name] = &config;
-        return;
-    }
-    TypeKind kind = topic_type.kind();
-    switch (kind.underlying()) {
-    case TypeKind::PRIMITIVE_TYPE: {
-        if (kind == TypeKind::BOOLEAN_TYPE 
-        || kind == TypeKind::CHAR_8_TYPE
-        || kind == TypeKind::UINT_8_TYPE) {
+    //DEBUG
+    std::cout << "ignore_list: not in the list." << endl;
+    
+    if (is_primitive_type(topic_type)) {
+        TypeKind kind = topic_type.kind();
+        if (kind.underlying() == TypeKind::BOOLEAN_TYPE 
+        || kind.underlying() == TypeKind::CHAR_8_TYPE
+        || kind.underlying() == TypeKind::UINT_8_TYPE) {
             // Not mappable
-            break;
+            return;
         } else {
             config.data_type = kind;
         }
-        config_map[config.name] = &config;
+        FamilyConfig* save_config = new FamilyConfig(config);
+        save_config->data_path.erase(save_config->data_path.length()-1, 1);
+        save_config->name.erase(save_config->name.length()-1, 1);
+        config_map[save_config->name] = save_config;
+        return;
+    // statisticVaraible direct alias to mean of StatisticMetric
+    } else if (topic_type.name().compare("StatisticVariable") == 0) {
+        config.data_path.append("publication_period_metrics.mean");
+        FamilyConfig* save_config = new FamilyConfig(config);
+        save_config->data_path.erase(save_config->data_path.length()-1, 1);
+        save_config->name.erase(save_config->name.length()-1, 1);
+        config_map[config.name] = save_config;
+        //DEBUG
+        std::cout << "StatisticVariable is found." << endl;
+        return;
     }
-        break;
+    //DEBUG
+    std::cout << "check for StatisticVariable is done" << endl;
+
+    TypeKind kind = topic_type.kind();
+    switch (kind.underlying()) {
     case TypeKind::UNION_TYPE: {
         const UnionType& union_type =
                 static_cast<const UnionType&> (topic_type);
         for (int i = 0; i < union_type.member_count(); ++i) {
             const UnionMember& member = union_type.member(i); 
             FamilyConfig new_config(config);
+            //DEBUG
+            std::cout << "new_config: " << new_config.data_path << endl;
             new_config.name.append(member.name());
             new_config.name.append("_");
             new_config.data_path.append(member.name());
@@ -212,17 +212,29 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
     case TypeKind::STRUCTURE_TYPE: {
         const StructType& struct_type =
                 static_cast<const StructType&> (topic_type);
+        //DEBUG
+        std::cout << "In Structure type: " << endl;
         for (int i = 0; i < struct_type.member_count(); ++i) {
             const Member& member = struct_type.member(i);
+            //DEBUG
+            std::cout << "member name " << member.name() << endl;
+            if (!is_primitive_type(member.type())) {
+                std::cout << "member type " << member.type().name() << endl;
+            } else {
+                std::cout << "member type primitive." << endl; 
+            }
             if (member.is_key()) {
                 // data path to this member 
                 // TODO-- check 
                 // assuming key members always at the top
+                std::cout << "is_key" << endl;
                 string data_path = config.data_path;
                 data_path.append(member.name());
                 config.key_map[member.name()] = data_path;
             } else {
                 FamilyConfig new_config(config);
+                //DEBUG
+                std::cout << "new_config: " << new_config.data_path << endl;
                 new_config.name.append(member.name());
                 new_config.name.append("_");
                 new_config.data_path.append(member.name());
@@ -237,6 +249,8 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
                 static_cast<const ArrayType &>(topic_type);
 
         FamilyConfig new_config(config);
+        //DEBUG
+        std::cout << "new_config: " << new_config.data_path << endl;
         // how to access array element from DynamicData
         // LoanedDynamicData or vector<>
         std::vector<string> results;
@@ -250,6 +264,8 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
                 static_cast<const SequenceType &>(topic_type);
                 
         FamilyConfig new_config(config);
+        //DEBUG
+        std::cout << "new_config: " << new_config.data_path << endl;
         std::vector<string> results;
         boost::split(results, new_config.data_path, [](char c){return c == '.';});
         new_config.collection_map[results.back()] = new_config.data_path;
@@ -313,7 +329,7 @@ void Mapper::register_metrics(std::shared_ptr<Registry> registry) {
         FamilyConfig* fam = cit->second;
         // DEBUG
         std::cout << "fam->name: " << fam->name << endl;
-        std::cout << "fam->numMetrics: " << fam->num_metrics << endl;
+        std::cout << "fam->data_path: " << fam->data_path << endl << endl;
         temp = create_family(fam, registry);
         family_map[fam->name] = temp;
     }
@@ -376,63 +392,89 @@ bool Mapper::is_auto_mapping() {
 *  Only work with basic data with no array or sequence
 *  Return: double 
 */
-double Mapper::get_value(const dds::core::xtypes::DynamicData& data, vector<string> path, TypeKind kind) {
+double Mapper::get_value(const dds::core::xtypes::DynamicData& data, string data_path, TypeKind kind) {
     DynamicData temp = data;
-    for (int i = 0; i < path.size(); ++i) {
-        if (i == path.size()-1) {
-            if (kind == TypeKind::INT_16_TYPE ) {
-                return (double) temp.value<int16_t>(path[i]);
-            } else if (kind == TypeKind::UINT_16_TYPE) {
-                return (double) temp.value<uint16_t>(path[i]);
-            } else if (kind == TypeKind::INT_32_TYPE) {
-                return (double) temp.value<int32_t>(path[i]);
-            } else if (kind == TypeKind::UINT_32_TYPE) {
-                return (double) temp.value<uint32_t>(path[i]);
-            } else if (kind == TypeKind::INT_64_TYPE) {
-                return (double) temp.value<int64_t>(path[i]);
-            } else if (kind == TypeKind::UINT_64_TYPE) {
-                return (double) temp.value<uint64_t>(path[i]);
-            } else if (kind == TypeKind::FLOAT_32_TYPE) {
-                return (double) temp.value<float>(path[i]);
-            } else if (kind == TypeKind::FLOAT_64_TYPE) {
-                return temp.value<double>(path[i]);
-            // } else if (kind == TypeKind::FLOAT_128_TYPE) {
-            //     return (double) temp.value<rti::core::LongDouble>(path[i]);
-            } else {
-                return (double) temp.value<int>(path[i]);
-            }
-        }
-        temp = temp.value<DynamicData>(path[i]);
+    if (kind.underlying() == TypeKind::INT_16_TYPE ) {
+        return (double) temp.value<int16_t>(data_path);
+    } else if (kind.underlying() == TypeKind::UINT_16_TYPE) {
+        return (double) temp.value<uint16_t>(data_path);
+    } else if (kind.underlying() == TypeKind::INT_32_TYPE) {
+        return (double) temp.value<int32_t>(data_path);
+    } else if (kind.underlying() == TypeKind::UINT_32_TYPE) {
+        return (double) temp.value<uint32_t>(data_path);
+    } else if (kind.underlying() == TypeKind::INT_64_TYPE) {
+        return (double) temp.value<int64_t>(data_path);
+    } else if (kind.underlying() == TypeKind::UINT_64_TYPE) {
+        return (double) temp.value<uint64_t>(data_path);
+    } else if (kind.underlying() == TypeKind::FLOAT_32_TYPE) {
+        return (double) temp.value<float>(data_path);
+    } else if (kind.underlying() == TypeKind::FLOAT_64_TYPE) {
+        return temp.value<double>(data_path);
+    // } else if (kind == TypeKind::FLOAT_128_TYPE) {
+    //     return (double) temp.value<rti::core::LongDouble>(path[i]);
+    } else {
+        return (double) temp.value<int>(data_path);
     }
     throw new std::runtime_error("get_value: can't find value");
     return 0;
 }
 
-// get the string representation of keyed member at data_path
-// traverse basic data structure only 
-// Return NULL if finding array or sequence
-string Mapper::get_string(const dds::core::xtypes::DynamicData& data, vector<string> path) {
-    DynamicData temp = data;
-    try {
-        for (int i = 0; i < path.size(); ++i) {
-            if (temp.is_member_key(path[i])) { 
-                TypeKind kind = temp.value<DynamicData>(path[i]).type_kind();
-                if (kind == TypeKind::PRIMITIVE_TYPE ) {
-                    vector<string> new_path = {path[i]};
-                    return to_string(get_value(temp, new_path, kind));
-                } else if (kind == TypeKind::STRING_TYPE) {
-                    return temp.value<string>(path[i]);
-                } else if (kind == TypeKind::WSTRING_TYPE) {
-                    return temp.value<string>(path[i]);
+void Mapper::get_key_labels(map<string, string>* key_labels, const DynamicData& data, string data_path) {
+    //DEBUG
+    std::cout << "In get_key_labels: " << data_path << endl;
+    std::vector<string> path_key = {};
+    boost::split(path_key, data_path, [](char c){return c == '.';});
+
+    try 
+    {
+        DynamicData trav_data = data.value<DynamicData>(data_path);
+        if (is_primitive_type(trav_data.type())) {
+            // DEBUG
+            std::cout << "get_key_labels: primitive" << endl;
+            TypeKind kind = trav_data.type_kind();
+            double value = get_value(data, data_path, kind);
+            // DEBUG
+            std::cout << "get key" << endl;
+            (*key_labels)[data_path] = to_string(value);
+        } else if (trav_data.type_kind().underlying() == TypeKind::STRING_TYPE 
+                || trav_data.type_kind().underlying() == TypeKind::WSTRING_TYPE) {
+            // DEBUG
+            std::cout << "get_key_labels: string" << endl;
+            string value = data.value<string>(data_path);
+            // DEBUG
+            std::cout << "get key" << endl;
+            (*key_labels)[data_path] = value;
+        } else if (is_collection_type(trav_data.type())) {
+            int count = data.value<int>(data_path + "#");
+            // DEBUG
+            std::cout << "get_key_labels: collection " << count << endl;
+            for (int i =0; i < count; ++i) {
+                string new_data_path = data_path + "[" + to_string(i) + "]";
+                get_key_labels(key_labels, data, new_data_path);
+            }
+        } else if (is_constructed_type(trav_data.type())) {
+            int member_count = trav_data.member_count();
+            // DEBUG
+            std::cout << "get_key_labels: struct " << member_count << endl;
+            for (int i = 1; i <= member_count; ++i) { 
+                if (trav_data.member_exists(i)) { // for union and optional
+                    string member_name = trav_data.member_info(i).member_name();
+                    string new_data_path = data_path + "." + member_name;
+                    get_key_labels(key_labels, data, new_data_path);
                 }
             }
-            temp = temp.value<DynamicData>(path[i]);
         }
-    } catch (std::exception e) {
-        return "";
+    } catch (dds::core::InvalidArgumentError e) {
+        std::cout << e.what() << endl;
+        return; // member does not exist so leave it
+    } catch (dds::core::IllegalOperationError e) {
+        std::cout << "wrong type " << e.what() << endl;
+        return;
+    } catch (...) {
+        std:;cout << "unknown exception" << endl;
+        return;
     }
-    throw new std::runtime_error("get_string: can't find value");
-    return 0;
+    
 }
 
 // deal with array or sequence
@@ -445,23 +487,25 @@ void Mapper::get_data(vector<map<string, string>>* set_labels, vector<double>* v
         map<string, string> key_labels = {};
         for (map<string, string>::const_iterator cit = config.key_map.begin();
         cit != config.key_map.end(); ++cit) {
-            std::vector<string> path_key;
-            string str_path_key = cit->second;
-            boost::split(path_key, str_path_key, [](char c){return c == '.';});
-            string str_rep = get_string(data, path_key);
-            key_labels[cit->first] = str_rep;
+            
+            map<string, string>* key_labels = {};
+            // DEBUG
+            std::cout << "get_data: before get_key_labels" << endl;
+            std::cout << "key: " << cit->second << endl;
+            get_key_labels(key_labels, data, cit->second);
+            std::cout << "get_key_labels success " << endl << endl;
+            if (!key_labels->empty()) 
+                set_labels->push_back(*key_labels);
         }    
-        set_labels->push_back(key_labels);
+        
 
         // value
-        std::vector<string> path_value;
-        boost::split(path_value, config.data_path, [](char c){return c == '.';});
-        double var = get_value(data, path_value, config.data_type);
+        double var = get_value(data, config.data_path, config.data_type);
         vars->push_back(var);
 
     } else {
 
-        std::vector<string> path_list;
+        std::vector<string> path_list = {};
         string str_path_list = config.collection_map.begin()->second;
         boost::split(path_list, str_path_list, [](char c){return c == '.';});
 
@@ -470,14 +514,16 @@ void Mapper::get_data(vector<map<string, string>>* set_labels, vector<double>* v
         // key_map for recursive 
         map<string, string> new_key_map = config.key_map;
         for (map<string, string>::const_iterator cit = config.key_map.begin(); cit != config.key_map.end(); ++cit) {
-            std::vector<string> path_key;
+            std::vector<string> path_key = {};
             string str_path_key = cit->second;
             boost::split(path_key, str_path_key, [](char c){return c == '.';});
             // key before before list 
             // key after list depend on what element of list
             if (path_key.size() < path_list.size()) {
-                string str_rep = get_string(data, path_key);
-                key_labels[cit->first] = str_rep;
+                map<string, string>* key_labels = {};
+                get_key_labels(key_labels, data, cit->second);
+                if (!key_labels->empty()) 
+                    set_labels->push_back(*key_labels);
                 new_key_map.erase(cit->first);
             } else {
                 // stop when key is a member of element of list
@@ -503,7 +549,15 @@ void Mapper::get_data(vector<map<string, string>>* set_labels, vector<double>* v
         try {
             // traverse to the array or sequence parent
             for (int i = 0; i < path_list.size() - 1; ++i) {
-                temp = temp.value<DynamicData>(path_list[i]);
+                // TODO pass in fully quefy member
+                if (temp.member_exists(path_list[i])) {
+                    temp = temp.value<DynamicData>(path_list[i]);
+                } else {
+                    // DEBUG 
+                    std::cout << path_list[i] << " member does not exist." << endl;
+                    set_labels->clear();
+                    vars->clear();
+                }
             }
             string name_list = path_list[path_list.size()];
             //vector<DynamicData> vec = temp.get_values<DynamicData>(name_list);
@@ -553,6 +607,9 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
         vector<double> vars = {};
         try{
             Mapper::get_data(&labels_list, &vars, data, *(cit->second));
+            if (vars.empty() && labels_list.empty()) {
+                continue;
+            }
             // DEBUG
             std::cout << " return ";
             for (int i=0;i<vars.size();++i) {cout<<vars[i];} 
@@ -560,6 +617,13 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
         } catch(std::exception& e) {
             std::cout << "get_data error: set to 0" << endl; 
             vars.push_back(0.0);
+        } catch(...) {
+            std::cout << "get_data throw unexpected exception" << endl;
+            vars.push_back(0.0);
+        }
+
+        if (labels_list.size() != vars.size()) {
+            std::cout << "labels_list != vars" << endl;
         }
 
         // update all time series associated with this metric
@@ -595,7 +659,6 @@ bool add_metric::operator()( Family<prometheus::Counter>* operand) const {
         return false;
     }
 }
-
 bool add_metric::operator()( Family<prometheus::Gauge>* operand) const {
     try {
         operand->Add(labels);

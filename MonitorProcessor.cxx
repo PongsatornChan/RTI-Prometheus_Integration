@@ -91,11 +91,15 @@ void MonitorExposer::on_input_enabled(
     if (mapper.is_auto_mapping()) {
         name.append("_");
         FamilyConfig fam_config(name, "");
+        //DEBUG
+        std::cout << "Before auto_map" << endl;
         mapper.auto_map(*topic_type, fam_config);
-        std::cout << "Auto_mapping no no" << endl;
+        //DEBUG
+        std::cout << "Auto_map success" << endl;
     } 
     std::cout << "register metrics...." << endl;
     mapper.register_metrics(registry);
+    std::cout << "register completed!" << endl << endl;
     exposer.RegisterCollectable(registry);
 }
 

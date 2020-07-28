@@ -201,7 +201,7 @@ class Mapper {
          *        TYPE TypeKind of the member data
          * @return double value from map-able member pointed by path
          */
-        static double get_value(const dds::core::xtypes::DynamicData& data, vector<string> path, TypeKind); 
+        static double get_value(const dds::core::xtypes::DynamicData& data, string data_path, TypeKind); 
         static void get_data(vector<map<string, string>>*, vector<double>*, const dds::core::xtypes::DynamicData&, FamilyConfig);
         
         /**
@@ -212,7 +212,9 @@ class Mapper {
          *         PATH path lead to the keyed member
          *  @return string representation of the keyed member
          */
-        static string get_string(const dds::core::xtypes::DynamicData& data, vector<string> path);
+        static void get_string_rep(map<string, string>* key_label, const dds::core::xtypes::DynamicData& data, string data_path);
+
+        static void get_key_labels(map<string, string>* key_labels, const DynamicData& data, string data_path);
     private:
 
         bool is_auto_map;
