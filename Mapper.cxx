@@ -97,27 +97,36 @@ FamilyConfig::~FamilyConfig() {}
 Mapper::Mapper(std::string config_file) {
     string config_filename = "../";
     config_filename.append(config_file);
-    YAML::Node topic = YAML::LoadFile(config_filename);
-    YAML::Node config = topic["Topic"];
+    YAML::Node config = YAML::LoadFile(config_filename);
+    // YAML::Node config = topic["Topic"];
     if (config.IsNull()) {
         throw YAML::BadFile(config_filename);
     }
     
     config_map = {};
-    if (config["ignore"].IsSequence()) {
-        ignore_list = config["ignore"].as<vector<string>>();
+    if (config["ignore_list"].IsSequence()) {
+        // DEBUG
+        std::cout << "ignore_list found" << endl;
+        ignore_list = config["ignore_list"].as<vector<string>>();
     } else {
         ignore_list = {};
+        // DEBUG
+        std::cout << "ignore_list found" << endl;
     }
     family_map = {};
 
     is_auto_map = true;
     // TODO mapping with list and key
-    for (YAML::const_iterator it = config["Metrics"].begin(); it != config["Metrics"].end(); ++it) {
+    for (YAML::const_iterator it = config["metrics"].begin(); it != config["metrics"].end(); ++it) {
         is_auto_map = false;
-        string name = "";
-        string data_path = it->second["data"].as<string>();
-        name.append(boost::replace_all_copy(data_path, ".", "_"));
+        
+        string data_path = it->second["data_path"].as<string>();
+        string name;
+        if (it->second["name"]) {
+            name = it->second["name"].as<string>();
+        } else {
+            name = boost::replace_all_copy(data_path, ".", "_");
+        }
 
         MetricType type;
         if (it->second["type"]) {
@@ -153,6 +162,7 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
     std::cout << "ignore_list size: " << ignore_list.size() << endl;
     std::cout << "Config: " << config.data_path << endl;
     for (int i = 0; i < ignore_list.size(); ++i) {
+        // check for existance
         if (config.data_path.find(ignore_list[i]) != string::npos) {
             //DEBUG
             std::cout << "ignore_list " << config.data_path << endl;
@@ -165,13 +175,12 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
     if (is_primitive_type(topic_type)) {
         TypeKind kind = topic_type.kind();
         if (kind.underlying() == TypeKind::BOOLEAN_TYPE 
-        || kind.underlying() == TypeKind::CHAR_8_TYPE
-        || kind.underlying() == TypeKind::UINT_8_TYPE) {
+                || kind.underlying() == TypeKind::CHAR_8_TYPE
+                || kind.underlying() == TypeKind::UINT_8_TYPE) {
             // Not mappable
             return;
-        } else {
-            config.data_type = kind;
         }
+        config.data_type = kind;
         FamilyConfig* save_config = new FamilyConfig(config);
         save_config->data_path.erase(save_config->data_path.length()-1, 1);
         save_config->name.erase(save_config->name.length()-1, 1);
@@ -507,7 +516,8 @@ void Mapper::get_key_labels(std::map<string, string> &key_labels, const DynamicD
 }
 
 // deal with array or sequence
-void Mapper::get_data(vector<map<string, string>>* set_labels, vector<double>* vars, 
+// TODO
+void Mapper::get_data(vector<map<string, string>>& set_labels, vector<double>& vars, 
                 const dds::core::xtypes::DynamicData& data, FamilyConfig config) {
     
     // no list in path (base case)
@@ -524,20 +534,20 @@ void Mapper::get_data(vector<map<string, string>>* set_labels, vector<double>* v
             std::cout << "get_key_labels success " << endl << endl;
             
         }
-        set_labels->push_back(key_labels);    
+        set_labels.push_back(key_labels);    
         
         // value
         double var = get_value(data, config.data_path, config.data_type);
-        vars->push_back(var);
+        vars.push_back(var);
 
     } else {
-
+        // collection in path
         std::vector<string> path_list = {};
         string str_path_list = config.collection_map.begin()->second;
         boost::split(path_list, str_path_list, [](char c){return c == '.';});
 
         // get key labels before list
-        map<string, string> key_labels;
+        map<string, string> key_labels = {};
         // key_map for recursive 
         map<string, string> new_key_map = config.key_map;
         for (map<string, string>::const_iterator cit = config.key_map.begin(); cit != config.key_map.end(); ++cit) {
@@ -555,7 +565,7 @@ void Mapper::get_data(vector<map<string, string>>* set_labels, vector<double>* v
                 break;
             }
         }    
-        set_labels->push_back(key_labels);
+        // set_labels->push_back(key_labels);
 
         // TODO modify config
         FamilyConfig new_config(config);
@@ -581,11 +591,11 @@ void Mapper::get_data(vector<map<string, string>>* set_labels, vector<double>* v
                 } else {
                     // DEBUG 
                     std::cout << path_list[i] << " member does not exist." << endl;
-                    set_labels->clear();
-                    vars->clear();
+                    set_labels.clear();
+                    vars.clear();
                 }
             }
-            string name_list = path_list[path_list.size()];
+            string name_list = path_list[path_list.size()-1];
             //vector<DynamicData> vec = temp.get_values<DynamicData>(name_list);
             rti::core::xtypes::LoanedDynamicData vec = temp.loan_value(name_list);
             name_list.append("_index");
@@ -594,7 +604,7 @@ void Mapper::get_data(vector<map<string, string>>* set_labels, vector<double>* v
                 // assume vector can contain multiple empty maps
                 vector<map<string, string>> recur_set_labels = {};
                 vector<double> recur_vars = {};
-                get_data(&recur_set_labels, &recur_vars, vec.get().loan_value(i).get(), new_config);
+                get_data(recur_set_labels, recur_vars, vec.get().loan_value(i).get(), new_config);
                 // append parent key labels to the each child labels
                 for (int j = 0; j < recur_set_labels.size(); ++j) {
                     recur_set_labels[j].insert(key_labels.begin(), key_labels.end());
@@ -605,8 +615,8 @@ void Mapper::get_data(vector<map<string, string>>* set_labels, vector<double>* v
                     cout << "labels not match values. ABORT!" << endl;
                     throw new dds::core::Error("labels not match values");
                 }
-                set_labels->insert(set_labels->end(), recur_set_labels.begin(), recur_set_labels.end());
-                vars->insert(vars->end(), recur_vars.begin(), recur_vars.end());
+                set_labels.insert(set_labels.end(), recur_set_labels.begin(), recur_set_labels.end());
+                vars.insert(vars.end(), recur_vars.begin(), recur_vars.end());
             }
 
         } catch (std::exception e) {
@@ -628,11 +638,12 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
     counter.Increment();
 
     for (map<string, FamilyConfig*>::const_iterator cit = config_map.begin(); cit != config_map.end(); ++cit) {
-        
+        //DEBUG 
+        std::cout << "metric to be updated: " << cit->first << endl;
         vector<map<string,string>> labels_list = {};
         vector<double> vars = {};
         try{
-            Mapper::get_data(&labels_list, &vars, data, *(cit->second));
+            Mapper::get_data(labels_list, vars, data, *(cit->second));
             if (vars.empty() && labels_list.empty()) {
                 continue;
             }
@@ -674,12 +685,20 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
                 map<string, string> label_update;
                 for(map<string, string>::const_iterator cit = labels_list[i].begin(); cit != labels_list[i].end(); cit++) {
                     std::cout << cit->first <<", "<< cit->second << endl;
-                    label_update[boost::replace_all_copy(cit->first, ".", "_")]
+                    string updated_name = boost::replace_all_copy(cit->first, ".", "_");
+                    boost::replace_all(updated_name, "[", "_");
+                    boost::replace_all(updated_name, "]", "_");
+                    // DEBUG
+                    std::cout << "Update name: " << updated_name << endl;
+                    label_update[updated_name] = cit->second;
                 } 
-                updater.labels = labels_list[i];
+                updater.labels = label_update;
                 boost::apply_visitor(updater, family_map[cit->first]);
             }
+            // Debug 
+            std::cout << "Finish update value " i << " of " << cit->first << endl;
         }
+        std::cout << "Finsish with: " << cit->first << endl << endl << endl;
     }
 
     return 1;

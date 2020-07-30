@@ -221,7 +221,14 @@ class Mapper {
          */
         static void get_key_labels(std::map<string, string> &key_labels, const DynamicData& data, string data_path);
 
-        static void get_data(vector<map<string, string>>*, vector<double>*, const dds::core::xtypes::DynamicData&, FamilyConfig);
+        /**
+         *  Utility function to get value(s) and label(s) to update a metric
+         *  @param SET_LABELS assume set_labels vector is always empty at the start
+         *                    each map in the vector is a label for one value in vars
+         *  @param VARS assume vars vector is always empty at the start
+         *              if there is a list in path to the member, vars will contain 
+         */
+        static void get_data(vector<map<string, string>> &set_labels, vector<double> &vars, const dds::core::xtypes::DynamicData&, FamilyConfig);
     private:
 
         bool is_auto_map;

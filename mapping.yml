@@ -1,17 +1,14 @@
-Topic:
-  # only first time and never change
-  pesudo_metric: 
-    - host.id
-    - process.id
-    - host.name
-  ignore:
-    - process.user_cpu_time_change
-  Metrics:
-    first: 
-      # name: "domainParticipant_process_statistics" optional
-      # type: "Gauge" optional
-      data: process.user_cpu_time.sec
-      description: "Tell cpu time"
-    second:
-      data: process.kernel_cpu_time.sec
-      description: "Tell kernel_cpu_time"
+# only first time and never change
+pesudo_metric: 
+  - host.id
+  - process.id
+  - host.name
+ignore:
+  - process.user_cpu_time_change
+metrics:
+  - # name: "domainParticipant_process_statistics" optional
+    # type: "Gauge" optional
+    data_path: process.user_cpu_time.sec
+    description: "Tell cpu time"
+  - data_path: process.kernel_cpu_time.sec
+    description: "Tell kernel_cpu_time"

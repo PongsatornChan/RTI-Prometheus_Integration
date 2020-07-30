@@ -21,21 +21,23 @@ Let build libraries first.
     II. Run CMake. The basic syntax is:
 
     ```
-    cmake [-G generator] [-DYAML_BUILD_SHARED_LIBS=ON|OFF] ..
+    cmake .. -DBUILD_SHARED_LIBS=ON
+    or debug version
+    cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Debug
     ```
 
-    * The `generator` is whatever type of build system you'd like to use. To see a full list of generators on your platform, just run `cmake` (with no arguments). For example:
-        * On Windows, you might use "Visual Studio 12 2013" to generate a Visual Studio 2013 solution or "Visual Studio 14 2015 Win64" to generate a 64-bit Visual Studio 2015 solution.
-        * On OS X, you might use "Xcode" to generate an Xcode project
-        * On a UNIX-y system, simply omit the option to generate a makefile
-
-    * yaml-cpp defaults to building a static library, but you may build a shared library by specifying `-DYAML_BUILD_SHARED_LIBS=ON`.
-
-    * For more options on customizing the build, see the [CMakeLists.txt](https://github.com/jbeder/yaml-cpp/blob/master/CMakeLists.txt) file.
-
     III. Build it!
+    
+    ```
+    cmake --build .
+    or debug version
+    cmake --build . --config Debug
+    ```
+
+    **NOTE**: tp switch between release and debug, clean and rebuild is needed
 
     VI. To clean up, just remove the `build` directory.
+
 
 2. prometheus-cpp
     For CMake builds don't forget to fetch the submodules first. Then build as usual.
@@ -131,7 +133,18 @@ the example in the previous step.
 
     ```sh
     $NDDSHOME/bin/rtiroutingservice -cfgFile ../RsMonitorProcessor.xml -cfgName MonitoringTopicExposer
+    or Debug version
+    $NDDSHOME/bin/rtiroutingserviced -cfgFile ../RsMonitorProcessor.xml -cfgName MonitoringTopicExposer
     ```
+    **NOTE** To run Debug version, RsMonitorProcessor.xml content needed to be change a bit
+    <plugin_library name="MonitorPluginLib">
+        <processor_plugin name="MonitorProcessor">
+            <dll>shapesprocessord</dll>
+            <create_function>
+                MonitorProcessorPlugin_create_processor_plugin
+            </create_function>
+        </processor_plugin>
+    </plugin_library>
 
 4.  Time to run *Prometheus*
 
