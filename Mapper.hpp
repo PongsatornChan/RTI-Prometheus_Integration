@@ -143,8 +143,6 @@ class Mapper {
 
         ~Mapper();
 
-        void initilize_instance_info(const DynamicType& type);
-
         void find_key_n_collection(const DynamicType& type, FamilyConfig &config);
 
         /**
