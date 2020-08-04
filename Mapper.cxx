@@ -32,12 +32,15 @@ using namespace prometheus;
 using namespace boost;
 
 namespace YAML {
+
 template<>
 struct convert<map<string, string>> {
+
     static Node encode(const map<string, string> &map) {
         YAML::Node node;
         node = YAML::Load("{}");
-        for (std::map<string, string>::const_iterator it = map.begin(); it != map.end(); ++it) {
+        for (std::map<string, string>::const_iterator it = map.begin();
+                it != map.end(); ++it) {
             node[it->first] = it->second;
         }
         return node;
@@ -53,24 +56,27 @@ struct convert<map<string, string>> {
         return true;
     }
 };
-}
 
-//---------FamilyConfig---------------------------------------------------------------------------------
-FamilyConfig::FamilyConfig(string i_name, string i_help,
-                        MetricType i_type, 
-                        string i_data_path,
-                        TypeKind i_data_type, 
-                        map<string, string> i_key_map, 
-                        map<string, string> i_collection_map, 
-                        unsigned long num) : 
-        type (i_type),
-        name (i_name),
-        help (i_help),
-        data_type (i_data_type),
-        key_map (i_key_map),
-        collection_map (i_collection_map),
-        num_metrics (num),
-        data_path (i_data_path)
+} // closing YAML
+
+//---------FamilyConfig---------------------------------------------------------
+FamilyConfig::FamilyConfig(
+        string i_name, 
+        string i_help,
+        MetricType i_type, 
+        string i_data_path,
+        TypeKind i_data_type, 
+        map<string, string> i_key_map, 
+        map<string, string> i_collection_map, 
+        unsigned long num) : 
+    type (i_type),
+    name (i_name),
+    help (i_help),
+    data_type (i_data_type),
+    key_map (i_key_map),
+    collection_map (i_collection_map),
+    num_metrics (num),
+    data_path (i_data_path)
 {
 
 }
@@ -90,9 +96,9 @@ FamilyConfig::FamilyConfig(const FamilyConfig& fam_config) :
 
 FamilyConfig::~FamilyConfig() {}
 
-//------------------------------------------------------------------------------------------------
-//---------Mapper---------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+//---------Mapper---------------------------------------------------------------
+//------------------------------------------------------------------------------
 // Deal with Configuration file
 Mapper::Mapper(std::string config_file) {
     string config_filename = "../";
@@ -103,29 +109,35 @@ Mapper::Mapper(std::string config_file) {
         throw YAML::BadFile(config_filename);
     }
     
+    instance_identifiers = config["instance_info"].as<vector<string>>();
+
     config_map = {};
-    if (config["ignore_list"].IsSequence()) {
+    if (config["ignore"].IsSequence()) {
         // DEBUG
-        std::cout << "ignore_list found" << endl;
-        ignore_list = config["ignore_list"].as<vector<string>>();
+        std::cout << "ignore found" << endl;
+        ignore_list = config["ignore"].as<vector<string>>();
     } else {
         ignore_list = {};
-        // DEBUG
-        std::cout << "ignore_list found" << endl;
     }
     family_map = {};
 
-    is_auto_map = true;
+    is_auto_map = config["enable_auto_map"].as<bool>();
+
+    expand_key_hash = config["expand_key_hash"].as<bool>();
+
     // TODO mapping with list and key
-    for (YAML::const_iterator it = config["metrics"].begin(); it != config["metrics"].end(); ++it) {
-        is_auto_map = false;
+    for (YAML::const_iterator it = config["metrics"].begin();
+            it != config["metrics"].end(); ++it) {
         
         string data_path = it->second["data_path"].as<string>();
+        // since auto map don't need to map specific metric again
+        ignore_list.push_back(data_path);
         string name;
         if (it->second["name"]) {
             name = it->second["name"].as<string>();
         } else {
             name = boost::replace_all_copy(data_path, ".", "_");
+            name = "&" + name;
         }
 
         MetricType type;
@@ -139,8 +151,15 @@ Mapper::Mapper(std::string config_file) {
         // TODO-- get key member before getting sample!?
         map<string, string> labels_map = {}; 
 
-        FamilyConfig* fam_config = new FamilyConfig(name, help, type, data_path, 
-                                    TypeKind::INT_64_TYPE, labels_map, {}, 0);
+        FamilyConfig* fam_config = 
+                new FamilyConfig(
+                        name,
+                        help,
+                        type,
+                        data_path, 
+                        TypeKind::INT_64_TYPE,
+                        labels_map, {},
+                        0);
         config_map[name] = fam_config;
     }
 }
@@ -150,13 +169,102 @@ Mapper::Mapper(std::string config_file) {
  * configMap (map<string, FamilyConfig*>)
  */ 
 Mapper::~Mapper() {
-     for (map<string, FamilyConfig*>::iterator it = config_map.begin(); it != config_map.end(); ++it) {
+     for (map<string, FamilyConfig*>::iterator it = config_map.begin();
+            it != config_map.end(); ++it) {
          delete it->second;
      }
      config_map.clear();
 }
 
-void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyConfig config) {
+void Mapper::find_key_n_collection(const dds::core::xtypes::DynamicType& type,
+        FamilyConfig &config) {
+    vector<string> data_path_vec;
+    boost::split(data_path_vec, config.data_path, [](char c){return c == '.';});
+    // looking for collection or key members in path
+    DynamicType current_type = type;
+    string current_data_path = "";
+    for (int i = 0; i < data_path_vec.size(); i++) {
+        TypeKind kind = current_type.kind();
+
+        if (kind.underlying() == TypeKind::STRUCTURE_TYPE) { 
+            const StructType& struct_type =
+                    static_cast<const StructType&> (current_type);
+            for (int i = 0; i < struct_type.member_count(); ++i) {
+                    const Member& member = struct_type.member(i);
+                if (member.is_key()) {
+                    string new_path = current_data_path;
+                    new_path.append(member.name());
+                    config.key_map[member.name()] = new_path;
+                }
+            }
+            string member_name = data_path_vec[i];
+            current_data_path.append(member_name);
+            current_data_path.append(".");
+            current_type = struct_type.member(member_name).type();
+
+        } else if (kind.underlying() == TypeKind::UNION_TYPE) {
+            const UnionType& union_type =
+                    static_cast<const UnionType&> (current_type);
+            string member_name = data_path_vec[i];
+            const UnionMember& member = union_type.member(member_name);
+            current_data_path.append(member_name);
+            current_data_path.append(".");
+            current_type = member.type();
+
+        } else if (is_collection_type(current_type)) {
+            config.collection_map[data_path_vec[i-1]] =
+                    current_data_path.substr(0, current_data_path.size() - 1);
+            if (kind.underlying() == TypeKind::ARRAY_TYPE) {
+                current_type = static_cast<const ArrayType &>(current_type)
+                        .content_type();
+                --i;
+            } else if (kind.underlying() == TypeKind::STRUCTURE_TYPE) {
+                current_type = static_cast<const SequenceType &>(current_type)
+                        .content_type();
+                --i;
+            } else {
+                return;
+            }
+        } else if (kind.underlying() == TypeKind::ALIAS_TYPE) {
+            const AliasType& alias_type =
+                    static_cast<const AliasType &>(current_type);
+            current_type = resolve_alias(alias_type);
+            --i;
+        } else {
+            return;
+        }
+    }
+}
+
+void Mapper::config_user_specify_metrics(const DynamicType& type) {
+    topic_name = type.name();
+    string name = topic_name;
+    name = boost::replace_all_copy(name, "::", "_");
+    map<string, FamilyConfig*> new_config_map = {};
+    for (map<string, FamilyConfig*>::iterator it = config_map.begin(); 
+            it != config_map.end(); ++it)
+    {   
+        // fix name
+        string new_name = name;
+        // In case of auto generate name, it needs topic name in the front
+        if (it->second->name[0] == '&') {
+            new_name.append(boost::replace_all_copy(it->second->name, "&", "_"));
+            it->second->name = new_name;
+        } else {
+            new_name = it->second->name;
+        }
+        find_key_n_collection(type, *(it->second) );
+        new_config_map[new_name] = it->second;
+    }
+    for (map<string, FamilyConfig*>::iterator it = config_map.begin();
+            it != config_map.end(); ++it) {
+        delete it->second;
+    }
+    config_map.clear();
+    config_map = new_config_map;
+}
+
+void Mapper::auto_map(const DynamicType& topic_type, FamilyConfig config) {
     //DEBUG
     std::cout << endl << "auto mapp is called" << endl;
     std::cout << "ignore_list size: " << ignore_list.size() << endl;
@@ -294,43 +402,40 @@ void Mapper::auto_map(const dds::core::xtypes::DynamicType& topic_type, FamilyCo
     
 }
 
-void Mapper::provide_name(string name) {
-    topic_name = name;
-    map<string, FamilyConfig*> new_config_map = {};
-    if (!is_auto_mapping()) {
-        for (map<string, FamilyConfig*>::iterator it = config_map.begin(); 
-        it != config_map.end(); ++it)
-        {
-            string new_name = name;
-            new_name.append("_");
-            new_name.append(it->second->name);
-            it->second->name = new_name;
-            new_config_map[new_name] = it->second;
-        }
-    }
-    config_map = new_config_map;
-}
-
 /*
 * Limitation of current implementation:
 *   - Seqence
 *   - Evolving Extendable type
 */
 void Mapper::register_metrics(std::shared_ptr<Registry> registry) {
+
     // call_on_data_avaialable_total is default metric
-    // TODO this can de the pusedo-metric
-    Family_variant temp = create_family(MetricType::Counter, 
-                                    "call_on_data_available_total", 
-                                    "How many times this processor call on_data_available()",
-                                    {{"Test", "on_data_available"}}, registry);
+    Family_variant temp =
+            create_family(
+                    MetricType::Counter, 
+                    "call_on_data_available_total", 
+                    "How many times this processor call on_data_available()",
+                    {{"Test", "on_data_available"}},
+                    registry);
+    add_metric adder;
+    adder.labels = {{"topic", topic_name}};
+    boost::apply_visitor(adder, temp);
+    family_map["call_on_data_available_total"] = temp;
+
+    // create and register instance_info (pseudo-metric) 
+    Family_variant instance_info =
+            create_family(
+                    MetricType::Gauge,
+                    "instance_info",
+                    "Contain human-readable about data instances",
+                    {},
+                    registry);
+    adder.labels = {{"topic", topic_name}};
+    boost::apply_visitor(adder, instance_info);
+    family_map["instance_info"] = instance_info;
 
     //DEBUG 
     std::cout << "config size: " << config_map.size() << endl;
-
-    add_metric adder;
-    adder.labels = {{"Topic", topic_name}};
-    boost::apply_visitor(adder, temp);
-    family_map["call_on_data_available_total"] = temp;
 
     for (map<string, FamilyConfig*>::const_iterator cit = config_map.begin();
         cit != config_map.end(); ++cit) {
@@ -637,6 +742,26 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
     Counter& counter = counter_fam->Add({{"Topic", topic_name}});
     counter.Increment();
 
+    // add information about a new instance
+    // TODO enable_key_hash
+    if (info.state().view_state() == dds::sub::status::ViewState::new_view()) {
+        update_metric updater;
+        updater.value = 0;
+        if (instance_identifiers.empty()) {
+            updater.labels = {{"topic", topic_name}, {"key", "0"}};
+        } else {
+            map<string, string> key_labels = {};
+            for (string data_path: instance_identifiers) {
+                get_key_labels(key_labels, data, data_path);
+            }
+            std::stringstream ss;
+            ss << info.instance_handle();
+            key_labels["key"] = ss.str();
+            updater.labels = key_labels;
+        }
+        boost::apply_visitor(updater, family_map["instance_info"]);
+    }
+
     for (map<string, FamilyConfig*>::const_iterator cit = config_map.begin(); cit != config_map.end(); ++cit) {
         //DEBUG 
         std::cout << "metric to be updated: " << cit->first << endl;
@@ -696,7 +821,7 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
                 boost::apply_visitor(updater, family_map[cit->first]);
             }
             // Debug 
-            std::cout << "Finish update value " i << " of " << cit->first << endl;
+            std::cout << "Finish update value " << i << " of " << cit->first << endl;
         }
         std::cout << "Finsish with: " << cit->first << endl << endl << endl;
     }

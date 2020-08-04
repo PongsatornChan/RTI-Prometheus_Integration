@@ -1,10 +1,11 @@
 pesudo_metric: 
-  - host.id
-  - process.id
-  - host.name
-ignore_list:
+  - host_id
+  - process_id
+  - participant_key
+ignore:
   - period
   - participant_key
   - domain_id
   - process_id
   - host_id
+enable_auto_map: true

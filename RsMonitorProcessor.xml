@@ -26,7 +26,8 @@
 
     <plugin_library name="MonitorPluginLib">
         <processor_plugin name="MonitorProcessor">
-            <dll>monitorprocessor</dll>
+            <!-- <dll>monitorprocessor</dll> for release version-->
+            <dll>shapesprocessor</dll>
             <create_function>
                 MonitorProcessorPlugin_create_processor_plugin
             </create_function>

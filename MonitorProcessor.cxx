@@ -85,10 +85,10 @@ void MonitorExposer::on_input_enabled(
     std::cout << "topic_type of " << topic_type->name() << endl;
     std::cout << "____________________________________" << '\n';
 
-    string name = topic_type->name();
-    name = boost::replace_all_copy(name, "::", "_");
-    mapper.provide_name(name);    
+    mapper.config_user_specify_metrics(*topic_type);    
     if (mapper.is_auto_mapping()) {
+        string name = topic_type->name();
+        name = boost::replace_all_copy(name, "::", "_");
         name.append("_");
         FamilyConfig fam_config(name, "");
         //DEBUG

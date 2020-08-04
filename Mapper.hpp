@@ -1,4 +1,4 @@
-/*
+/**
 *   Author: Pongsatorn Chanpanichravee
 *   The purpose of this class is to handle converting DDS topic to /metrics
 *   based on YAML mapping configuration. 
@@ -143,14 +143,9 @@ class Mapper {
 
         ~Mapper();
 
-        /**
-         *  Auto map all primative members of TYPE
-         * 
-         *  @param TYPE DynamicType to create metrics from
-         *         CONFIG enable recursive, contain information from 
-         *                higher level
-         */
-        void auto_map(const dds::core::xtypes::DynamicType& type, FamilyConfig config);
+        void initilize_instance_info(const DynamicType& type);
+
+        void find_key_n_collection(const DynamicType& type, FamilyConfig &config);
 
         /**
          * Call when is not auto mapping 
@@ -161,7 +156,16 @@ class Mapper {
          *  
          * @param NAME topic name to be attached to specific config, each level divide by _
          */
-        void provide_name(string name);
+        void config_user_specify_metrics(const DynamicType& type); 
+
+        /**
+         *  Auto map all primative members of TYPE
+         * 
+         *  @param TYPE DynamicType to create metrics from
+         *  @param CONFIG enable recursive, contain information from 
+         *                higher level
+         */
+        void auto_map(const dds::core::xtypes::DynamicType& type, FamilyConfig config);
 
         /** 
          *  Mapper will create a /metric based on config FILENAME 
@@ -233,6 +237,8 @@ class Mapper {
 
         bool is_auto_map;
 
+        bool expand_key_hash;
+
         string topic_name;
         /*
         * map which keeps track of metric Family created
@@ -245,14 +251,18 @@ class Mapper {
         *   NOTE: boost::vairant instead of std::variant for older c++ version
         */
         map<string, Family_variant> family_map;
-
+        
         /*
-        * keep members that will be ignore from mapping process
+        * Contain data_path to key members that differentiate one instance
+        * from another. This list is user specify.
         */
+        vector<string> instance_identifiers;
+        
+        // keep members that will be ignore from mapping process
         vector<string> ignore_list; 
 
         /*
-        * map that keeps track of configuration 
+        * Map that keeps track of configuration 
         * for easy access and keep YAML file abstract 
         * away from the logic of mapping.
         * Act as YAML file in a way
