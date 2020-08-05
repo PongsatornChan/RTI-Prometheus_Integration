@@ -182,6 +182,13 @@ class Mapper {
          */
         int update_metrics(const dds::core::xtypes::DynamicData&, const dds::sub::SampleInfo&);
 
+        bool is_auto_mapping();
+
+        bool use_key_hash_label();
+
+        static string data_path_to_label_name(string data_path);
+
+        static void format_key_label(map<string, string>& key_label);
         /**
          *  Utility function to determine type of metric 
          *  based on sting given
@@ -190,8 +197,6 @@ class Mapper {
          * @return MetricType (prometheus::Counter, Gauge, Histogram, Summary)
          */
         static MetricType what_type(std::string type);
-
-        bool is_auto_mapping();
 
         /**
          *  Utility function to retrive value from DATA sample
@@ -218,8 +223,9 @@ class Mapper {
          *  members point to bt path
          * 
          *  @param DATA data from topic sample
-         *         PATH path lead to the keyed member
-         *  @return string representation of the keyed member
+         *  @param PATH path lead to the keyed member
+         *  Return map with each keys equals data_path to a keyed member and
+         *         each values equals to value of a keyed member 
          */
         static void get_key_labels(std::map<string, string> &key_labels, const DynamicData& data, string data_path);
 
@@ -235,7 +241,7 @@ class Mapper {
 
         bool is_auto_map;
 
-        bool expand_key_hash;
+        bool use_key_hash;
 
         string topic_name;
         /*

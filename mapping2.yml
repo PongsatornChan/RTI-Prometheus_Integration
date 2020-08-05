@@ -1,4 +1,4 @@
-pesudo_metric: 
+instance_info: 
   - host_id
   - process_id
   - participant_key
@@ -9,3 +9,4 @@ ignore:
   - process_id
   - host_id
 enable_auto_map: true
+use_key_hash_label: true

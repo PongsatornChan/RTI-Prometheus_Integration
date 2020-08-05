@@ -108,59 +108,76 @@ Mapper::Mapper(std::string config_file) {
     if (config.IsNull()) {
         throw YAML::BadFile(config_filename);
     }
-    
-    instance_identifiers = config["instance_info"].as<vector<string>>();
-
-    config_map = {};
-    if (config["ignore"].IsSequence()) {
-        // DEBUG
-        std::cout << "ignore found" << endl;
-        ignore_list = config["ignore"].as<vector<string>>();
-    } else {
-        ignore_list = {};
-    }
     family_map = {};
-
-    is_auto_map = config["enable_auto_map"].as<bool>();
-
-    expand_key_hash = config["expand_key_hash"].as<bool>();
-
-    // TODO mapping with list and key
-    for (YAML::const_iterator it = config["metrics"].begin();
-            it != config["metrics"].end(); ++it) {
-        
-        string data_path = it->second["data_path"].as<string>();
-        // since auto map don't need to map specific metric again
-        ignore_list.push_back(data_path);
-        string name;
-        if (it->second["name"]) {
-            name = it->second["name"].as<string>();
+    config_map = {};
+    try {
+        if (config["instance_info"]) {
+            instance_identifiers = config["instance_info"].as<vector<string>>();
         } else {
-            name = boost::replace_all_copy(data_path, ".", "_");
-            name = "&" + name;
+            instance_identifiers = {};
         }
 
-        MetricType type;
-        if (it->second["type"]) {
-            type = what_type(it->second["type"].as<string>());
+        if (config["ignore"].IsSequence()) {
+            // DEBUG
+            std::cout << "ignore found" << endl;
+            ignore_list = config["ignore"].as<vector<string>>();
         } else {
-            type = MetricType::Gauge;
+            ignore_list = {};
         }
 
-        string help = it->second["description"].as<string>();
-        // TODO-- get key member before getting sample!?
-        map<string, string> labels_map = {}; 
+        if (config["enable_auto_map"]) {
+            is_auto_map = config["enable_auto_map"].as<bool>();
+        } else {
+            is_auto_map = true;
+        }
+        if (config["use_key_hash_label"]) {
+            use_key_hash = config["use_key_hash_label"].as<bool>();
+        } else {
+            use_key_hash = false;
+        }
 
-        FamilyConfig* fam_config = 
-                new FamilyConfig(
-                        name,
-                        help,
-                        type,
-                        data_path, 
-                        TypeKind::INT_64_TYPE,
-                        labels_map, {},
-                        0);
-        config_map[name] = fam_config;
+        // TODO mapping with list and key
+        for (YAML::const_iterator it = config["metrics"].begin();
+                it != config["metrics"].end(); ++it) {
+            
+            string data_path = it->second["data_path"].as<string>();
+            // since auto map don't need to map specific metric again
+            ignore_list.push_back(data_path);
+            string name;
+            if (it->second["name"]) {
+                name = it->second["name"].as<string>();
+            } else {
+                name = boost::replace_all_copy(data_path, ".", "_");
+                name = "&" + name;
+            }
+
+            MetricType type;
+            if (it->second["type"]) {
+                type = what_type(it->second["type"].as<string>());
+            } else {
+                type = MetricType::Gauge;
+            }
+
+            string help = it->second["description"].as<string>();
+            // TODO-- get key member before getting sample!?
+            map<string, string> labels_map = {}; 
+
+            FamilyConfig* fam_config = 
+                    new FamilyConfig(
+                            name,
+                            help,
+                            type,
+                            data_path, 
+                            TypeKind::INT_64_TYPE,
+                            labels_map, {},
+                            0);
+            config_map[name] = fam_config;
+        }
+    } catch (YAML::BadConversion& e) {
+        std::cout << "One or more key-value pairs in " << config_filename;
+        std::cout << " is missing or in the wrong format." << endl;
+        std::cout << e.what() << endl;
+        exit(1);
     }
 }
 
@@ -430,7 +447,7 @@ void Mapper::register_metrics(std::shared_ptr<Registry> registry) {
                     "Contain human-readable about data instances",
                     {},
                     registry);
-    adder.labels = {{"topic", topic_name}};
+    adder.labels = {};
     boost::apply_visitor(adder, instance_info);
     family_map["instance_info"] = instance_info;
 
@@ -475,6 +492,30 @@ Family_variant Mapper::create_family(FamilyConfig* famConfig, std::shared_ptr<Re
     return create_family(famConfig->type, famConfig->name, famConfig->help, {}, registry);
 }
 
+bool Mapper::is_auto_mapping() {
+    return is_auto_map;
+}
+
+bool Mapper::use_key_hash_label() {
+    return use_key_hash;
+}
+
+string Mapper::data_path_to_label_name(string data_path) {
+    string updated_name = boost::replace_all_copy(data_path, ".", "_");
+    boost::replace_all(updated_name, "[", "_");
+    boost::replace_all(updated_name, "]", "_");
+    return updated_name;
+}
+
+void Mapper::format_key_label(map<string, string>& key_label) {
+    map<string, string> updated_label;
+    for(map<string, string>::const_iterator cit = key_label.begin(); cit != key_label.end(); cit++) {
+        string updated_name = data_path_to_label_name(cit->first);
+        updated_label[updated_name] = cit->second;
+    }
+    key_label.clear();
+    key_label = updated_label;
+}
 /* 
 *  Utility function to determine type of metric 
 *  based on sting TYPE given
@@ -495,10 +536,6 @@ MetricType Mapper::what_type(std::string type) {
         std::cout << msg << endl;
         return MetricType::Gauge;
     }
-}
-
-bool Mapper::is_auto_mapping() {
-    return is_auto_map;
 }
 
 /* 
@@ -757,6 +794,7 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
             std::stringstream ss;
             ss << info.instance_handle();
             key_labels["key"] = ss.str();
+            format_key_label(key_labels);
             updater.labels = key_labels;
         }
         boost::apply_visitor(updater, family_map["instance_info"]);
