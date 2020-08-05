@@ -59,42 +59,39 @@ struct convert<map<string, string>> {
 
 } // closing YAML
 
-//---------FamilyConfig---------------------------------------------------------
-FamilyConfig::FamilyConfig(
+//---------MetricConfig---------------------------------------------------------
+MetricConfig::MetricConfig(
         string i_name, 
         string i_help,
         MetricType i_type, 
         string i_data_path,
         TypeKind i_data_type, 
         map<string, string> i_key_map, 
-        map<string, string> i_collection_map, 
-        unsigned long num) : 
+        map<string, string> i_collection_map) : 
     type (i_type),
     name (i_name),
     help (i_help),
     data_type (i_data_type),
     key_map (i_key_map),
     collection_map (i_collection_map),
-    num_metrics (num),
     data_path (i_data_path)
 {
 
 }
 
-FamilyConfig::FamilyConfig(const FamilyConfig& fam_config) :
+MetricConfig::MetricConfig(const MetricConfig& fam_config) :
     type (fam_config.type),
     name (fam_config.name),
     help (fam_config.help),
     data_type (fam_config.data_type),
     key_map (fam_config.key_map),
     collection_map (fam_config.collection_map),
-    num_metrics (fam_config.num_metrics),
     data_path (fam_config.data_path)
 {
 
 }
 
-FamilyConfig::~FamilyConfig() {}
+MetricConfig::~MetricConfig() {}
 
 //------------------------------------------------------------------------------
 //---------Mapper---------------------------------------------------------------
@@ -162,16 +159,16 @@ Mapper::Mapper(std::string config_file) {
             // TODO-- get key member before getting sample!?
             map<string, string> labels_map = {}; 
 
-            FamilyConfig* fam_config = 
-                    new FamilyConfig(
+            MetricConfig* metric_config = 
+                    new MetricConfig(
                             name,
                             help,
                             type,
                             data_path, 
                             TypeKind::INT_64_TYPE,
-                            labels_map, {},
-                            0);
-            config_map[name] = fam_config;
+                            labels_map, 
+                            {});
+            config_map[name] = metric_config;
         }
     } catch (YAML::BadConversion& e) {
         std::cout << "One or more key-value pairs in " << config_filename;
@@ -183,10 +180,10 @@ Mapper::Mapper(std::string config_file) {
 
 /**
  * Deallocate metrics_vec (vector<MetricConfig*>)
- * configMap (map<string, FamilyConfig*>)
+ * configMap (map<string, MetricConfig*>)
  */ 
 Mapper::~Mapper() {
-     for (map<string, FamilyConfig*>::iterator it = config_map.begin();
+     for (map<string, MetricConfig*>::iterator it = config_map.begin();
             it != config_map.end(); ++it) {
          delete it->second;
      }
@@ -194,7 +191,7 @@ Mapper::~Mapper() {
 }
 
 void Mapper::find_key_n_collection(const dds::core::xtypes::DynamicType& type,
-        FamilyConfig &config) {
+        MetricConfig &config) {
     vector<string> data_path_vec;
     boost::split(data_path_vec, config.data_path, [](char c){return c == '.';});
     // looking for collection or key members in path
@@ -257,8 +254,8 @@ void Mapper::config_user_specify_metrics(const DynamicType& type) {
     topic_name = type.name();
     string name = topic_name;
     name = boost::replace_all_copy(name, "::", "_");
-    map<string, FamilyConfig*> new_config_map = {};
-    for (map<string, FamilyConfig*>::iterator it = config_map.begin(); 
+    map<string, MetricConfig*> new_config_map = {};
+    for (map<string, MetricConfig*>::iterator it = config_map.begin(); 
             it != config_map.end(); ++it)
     {   
         // fix name
@@ -273,7 +270,7 @@ void Mapper::config_user_specify_metrics(const DynamicType& type) {
         find_key_n_collection(type, *(it->second) );
         new_config_map[new_name] = it->second;
     }
-    for (map<string, FamilyConfig*>::iterator it = config_map.begin();
+    for (map<string, MetricConfig*>::iterator it = config_map.begin();
             it != config_map.end(); ++it) {
         delete it->second;
     }
@@ -281,7 +278,7 @@ void Mapper::config_user_specify_metrics(const DynamicType& type) {
     config_map = new_config_map;
 }
 
-void Mapper::auto_map(const DynamicType& topic_type, FamilyConfig config) {
+void Mapper::auto_map(const DynamicType& topic_type, MetricConfig config) {
     //DEBUG
     std::cout << endl << "auto mapp is called" << endl;
     std::cout << "ignore_list size: " << ignore_list.size() << endl;
@@ -306,7 +303,7 @@ void Mapper::auto_map(const DynamicType& topic_type, FamilyConfig config) {
             return;
         }
         config.data_type = kind;
-        FamilyConfig* save_config = new FamilyConfig(config);
+        MetricConfig* save_config = new MetricConfig(config);
         save_config->data_path.erase(save_config->data_path.length()-1, 1);
         save_config->name.erase(save_config->name.length()-1, 1);
         config_map[save_config->name] = save_config;
@@ -314,7 +311,7 @@ void Mapper::auto_map(const DynamicType& topic_type, FamilyConfig config) {
     // statisticVaraible direct alias to mean of StatisticMetric
     } else if (topic_type.name().compare("StatisticVariable") == 0) {
         config.data_path.append("publication_period_metrics.mean");
-        FamilyConfig* save_config = new FamilyConfig(config);
+        MetricConfig* save_config = new MetricConfig(config);
         save_config->data_path.erase(save_config->data_path.length()-1, 1);
         save_config->name.erase(save_config->name.length()-1, 1);
         config_map[config.name] = save_config;
@@ -332,7 +329,7 @@ void Mapper::auto_map(const DynamicType& topic_type, FamilyConfig config) {
                 static_cast<const UnionType&> (topic_type);
         for (int i = 0; i < union_type.member_count(); ++i) {
             const UnionMember& member = union_type.member(i); 
-            FamilyConfig new_config(config);
+            MetricConfig new_config(config);
             //DEBUG
             std::cout << "new_config: " << new_config.data_path << endl;
             new_config.name.append(member.name());
@@ -366,7 +363,7 @@ void Mapper::auto_map(const DynamicType& topic_type, FamilyConfig config) {
                 data_path.append(member.name());
                 config.key_map[member.name()] = data_path;
             } else {
-                FamilyConfig new_config(config);
+                MetricConfig new_config(config);
                 //DEBUG
                 std::cout << "new_config: " << new_config.data_path << endl;
                 new_config.name.append(member.name());
@@ -382,7 +379,7 @@ void Mapper::auto_map(const DynamicType& topic_type, FamilyConfig config) {
         const ArrayType& array_type =
                 static_cast<const ArrayType &>(topic_type);
 
-        FamilyConfig new_config(config);
+        MetricConfig new_config(config);
         //DEBUG
         std::cout << "new_config: " << new_config.data_path << endl;
         // how to access array element from DynamicData
@@ -397,7 +394,7 @@ void Mapper::auto_map(const DynamicType& topic_type, FamilyConfig config) {
         const SequenceType& seq_type = 
                 static_cast<const SequenceType &>(topic_type);
                 
-        FamilyConfig new_config(config);
+        MetricConfig new_config(config);
         //DEBUG
         std::cout << "new_config: " << new_config.data_path << endl;
         std::vector<string> results;
@@ -409,7 +406,7 @@ void Mapper::auto_map(const DynamicType& topic_type, FamilyConfig config) {
     case TypeKind::ALIAS_TYPE: {
         const AliasType& alias_type =
                 static_cast<const AliasType &>(topic_type);
-        FamilyConfig new_config(config);
+        MetricConfig new_config(config);
         auto_map(resolve_alias(alias_type), new_config);
     }
         break;
@@ -428,7 +425,7 @@ void Mapper::register_metrics(std::shared_ptr<Registry> registry) {
 
     // call_on_data_avaialable_total is default metric
     Family_variant temp =
-            create_family(
+            create_metric(
                     MetricType::Counter, 
                     "call_on_data_available_total", 
                     "How many times this processor call on_data_available()",
@@ -441,7 +438,7 @@ void Mapper::register_metrics(std::shared_ptr<Registry> registry) {
 
     // create and register instance_info (pseudo-metric) 
     Family_variant instance_info =
-            create_family(
+            create_metric(
                     MetricType::Gauge,
                     "instance_info",
                     "Contain human-readable about data instances",
@@ -454,14 +451,14 @@ void Mapper::register_metrics(std::shared_ptr<Registry> registry) {
     //DEBUG 
     std::cout << "config size: " << config_map.size() << endl;
 
-    for (map<string, FamilyConfig*>::const_iterator cit = config_map.begin();
+    for (map<string, MetricConfig*>::const_iterator cit = config_map.begin();
         cit != config_map.end(); ++cit) {
         
-        FamilyConfig* fam = cit->second;
+        MetricConfig* fam = cit->second;
         // DEBUG
         std::cout << "fam->name: " << fam->name << endl;
         std::cout << "fam->data_path: " << fam->data_path << endl << endl;
-        temp = create_family(fam, registry);
+        temp = create_metric(fam, registry);
         family_map[fam->name] = temp;
     }
 }
@@ -472,7 +469,7 @@ void Mapper::register_metrics(std::shared_ptr<Registry> registry) {
 * Return: Family<T>* for T = Counter, Gauge, Histogram, or Summary
 * and return boost::blank if fail
 */
-Family_variant Mapper::create_family(MetricType type, string name, string detail, 
+Family_variant Mapper::create_metric(MetricType type, string name, string detail, 
                        const map<string, string>& labels, std::shared_ptr<Registry> registry) {
     switch(type){
         case MetricType::Counter:
@@ -488,8 +485,8 @@ Family_variant Mapper::create_family(MetricType type, string name, string detail
     }
 }
 
-Family_variant Mapper::create_family(FamilyConfig* famConfig, std::shared_ptr<Registry> registry) {
-    return create_family(famConfig->type, famConfig->name, famConfig->help, {}, registry);
+Family_variant Mapper::create_metric(MetricConfig* famConfig, std::shared_ptr<Registry> registry) {
+    return create_metric(famConfig->type, famConfig->name, famConfig->help, {}, registry);
 }
 
 bool Mapper::is_auto_mapping() {
@@ -660,7 +657,7 @@ void Mapper::get_key_labels(std::map<string, string> &key_labels, const DynamicD
 // deal with array or sequence
 // TODO
 void Mapper::get_data(vector<map<string, string>>& set_labels, vector<double>& vars, 
-                const dds::core::xtypes::DynamicData& data, FamilyConfig config) {
+                const dds::core::xtypes::DynamicData& data, MetricConfig config) {
     
     // no list in path (base case)
     if (config.collection_map.empty()) {
@@ -710,10 +707,10 @@ void Mapper::get_data(vector<map<string, string>>& set_labels, vector<double>& v
         // set_labels->push_back(key_labels);
 
         // TODO modify config
-        FamilyConfig new_config(config);
+        MetricConfig new_config(config);
         // only the unseen keys
         new_config.key_map = new_key_map;
-        // adjust FamilyConfig for recursive
+        // adjust MetricConfig for recursive
         for (map<string, string>::iterator it = new_config.key_map.begin(); it != new_config.key_map.end(); ++it) {
             it->second.erase(0, str_path_list.length() + 1);
         }
@@ -800,7 +797,7 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
         boost::apply_visitor(updater, family_map["instance_info"]);
     }
 
-    for (map<string, FamilyConfig*>::const_iterator cit = config_map.begin(); cit != config_map.end(); ++cit) {
+    for (map<string, MetricConfig*>::const_iterator cit = config_map.begin(); cit != config_map.end(); ++cit) {
         //DEBUG 
         std::cout << "metric to be updated: " << cit->first << endl;
         vector<map<string,string>> labels_list = {};

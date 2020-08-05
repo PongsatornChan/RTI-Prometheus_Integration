@@ -90,10 +90,10 @@ void MonitorExposer::on_input_enabled(
         string name = topic_type->name();
         name = boost::replace_all_copy(name, "::", "_");
         name.append("_");
-        FamilyConfig fam_config(name, "");
+        MetricConfig metric_config(name, "");
         //DEBUG
         std::cout << "Before auto_map" << endl;
-        mapper.auto_map(*topic_type, fam_config);
+        mapper.auto_map(*topic_type, metric_config);
         //DEBUG
         std::cout << "Auto_map success" << endl;
     } 
