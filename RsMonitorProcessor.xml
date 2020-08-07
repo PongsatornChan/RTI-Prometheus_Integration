@@ -61,7 +61,7 @@
                             <value>
                                 <element>
                                     <name>mapping</name>
-                                    <value>mapping2.yml</value>
+                                    <value>DomainPartiAutoMap.yml</value>
                                 </element>
                             </value>
                         </property>

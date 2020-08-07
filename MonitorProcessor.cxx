@@ -54,12 +54,13 @@ const std::string DEFAULT_ADDRESS = "127.0.0.1:8080";
 *  initalize all the family and metrics 
 *  These would be handle by MAPPER in the future 
 */
-MonitorExposer::MonitorExposer(std::string input_filename, 
-                               prometheus::Exposer& input_exposer,
-                               std::shared_ptr<prometheus::Registry> input_registry) : 
-        mapper (Mapper(input_filename)),
-        exposer (input_exposer),
-        registry (input_registry)
+MonitorExposer::MonitorExposer(
+        std::string input_filename, 
+        prometheus::Exposer& input_exposer,
+        std::shared_ptr<prometheus::Registry> input_registry) : 
+    mapper (Mapper(input_filename)),
+    exposer (input_exposer),
+    registry (input_registry)
 {
         filename = input_filename;
         std::cout << "MonitorExposer(Processor) is created" << '\n';
@@ -79,8 +80,9 @@ void MonitorExposer::on_input_enabled(
     // be the type the input as well as the two outputs. Hence we can use
     // the input type to initialize the output data buffer
     output_data_ = input.get<DynamicData>().create_data();
-    DynamicType* topic_type = static_cast<dds::core::xtypes::DynamicType*>
-                                (input.stream_info().type_info().type_representation());
+    DynamicType* topic_type = 
+            static_cast<dds::core::xtypes::DynamicType*>(
+                    input.stream_info().type_info().type_representation());
     std::cout << "MonitorExposer::on_input_enabled is called." << '\n';
     std::cout << "topic_type of " << topic_type->name() << endl;
     std::cout << "____________________________________" << '\n';
@@ -125,13 +127,17 @@ void MonitorExposer::on_data_available(rti::routing::processor::Route &route)
 
 /*
  * --- MonitorProcessorPlugin --------------------------------------------------
+ * user can provide HTTP Address for exposer to use or 
+ * DEFAULT_ADDRESS of 127.0.0.1:8080
+ * Note: user will need to tell prometheus 
+ * about the custom address in prometheus.yml
  */
 
-MonitorProcessorPlugin::MonitorProcessorPlugin(const rti::routing::PropertySet &properties)
-/* user can provide HTTP Address for exposer to use or DEFAULT_ADDRESS of 127.0.0.1:8080
-   Note: user will need to tell prometheus about the custom address in prometheus.yml */
-: exposer {(properties.find("exposer") != properties.end() ? properties.find("exposer")->second: DEFAULT_ADDRESS) , 1},
-  registry (std::make_shared<Registry>())
+MonitorProcessorPlugin::MonitorProcessorPlugin(
+        const rti::routing::PropertySet &properties) :
+                exposer {(properties.find("exposer") != properties.end() ?
+                    properties.find("exposer")->second: DEFAULT_ADDRESS), 1},
+                registry (std::make_shared<Registry>())
 {       
 }
 
@@ -153,9 +159,9 @@ void MonitorProcessorPlugin::delete_processor(
 }
 
 void printDebug(std::string string) {
-        std::cout << "DEBUG-------------------\n";
-        std::cout << string << '\n';
-        std::cout << "END_DEBUG---------------\n";
+    std::cout << "DEBUG-------------------\n";
+    std::cout << string << '\n';
+    std::cout << "END_DEBUG---------------\n";
 }
 
 RTI_PROCESSOR_PLUGIN_CREATE_FUNCTION_DEF(MonitorProcessorPlugin);

@@ -51,9 +51,10 @@ public:
             rti::routing::processor::Route &route,
             rti::routing::processor::Input &input) override;
 
-    MonitorExposer(std::string input_filename, 
-                   prometheus::Exposer& input_exposer, 
-                   std::shared_ptr<prometheus::Registry> input_registry);
+    MonitorExposer(
+            std::string input_filename, 
+            prometheus::Exposer& input_exposer, 
+            std::shared_ptr<prometheus::Registry> input_registry);
 
     ~MonitorExposer();
 

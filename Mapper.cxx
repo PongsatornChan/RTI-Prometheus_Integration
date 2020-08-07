@@ -61,13 +61,13 @@ struct convert<map<string, string>> {
 
 //---------MetricConfig---------------------------------------------------------
 MetricConfig::MetricConfig(
-        string i_name, 
+        MetricName i_name, 
         string i_help,
         MetricType i_type, 
-        string i_data_path,
+        DataPath i_data_path,
         TypeKind i_data_type, 
-        map<string, string> i_key_map, 
-        map<string, string> i_collection_map) : 
+        map<MemberName, DataPath> i_key_map, 
+        map<MemberName, DataPath> i_collection_map) : 
     type (i_type),
     name (i_name),
     help (i_help),
@@ -97,7 +97,7 @@ MetricConfig::~MetricConfig() {}
 //---------Mapper---------------------------------------------------------------
 //------------------------------------------------------------------------------
 // Deal with Configuration file
-Mapper::Mapper(std::string config_file) {
+Mapper::Mapper(Filename config_file) {
     string config_filename = "../";
     config_filename.append(config_file);
     YAML::Node config = YAML::LoadFile(config_filename);
@@ -105,7 +105,7 @@ Mapper::Mapper(std::string config_file) {
     if (config.IsNull()) {
         throw YAML::BadFile(config_filename);
     }
-    family_map = {};
+    metric_map = {};
     config_map = {};
     try {
         if (config["instance_info"]) {
@@ -262,7 +262,8 @@ void Mapper::config_user_specify_metrics(const DynamicType& type) {
         string new_name = name;
         // In case of auto generate name, it needs topic name in the front
         if (it->second->name[0] == '&') {
-            new_name.append(boost::replace_all_copy(it->second->name, "&", "_"));
+            new_name.append(
+                    boost::replace_all_copy(it->second->name, "&", "_"));
             it->second->name = new_name;
         } else {
             new_name = it->second->name;
@@ -361,7 +362,9 @@ void Mapper::auto_map(const DynamicType& topic_type, MetricConfig config) {
                 std::cout << "is_key" << endl;
                 string data_path = config.data_path;
                 data_path.append(member.name());
-                config.key_map[member.name()] = data_path;
+                if (!use_key_hash_label()) {
+                    config.key_map[member.name()] = data_path;
+                }
             } else {
                 MetricConfig new_config(config);
                 //DEBUG
@@ -385,7 +388,10 @@ void Mapper::auto_map(const DynamicType& topic_type, MetricConfig config) {
         // how to access array element from DynamicData
         // LoanedDynamicData or vector<>
         std::vector<string> results;
-        boost::split(results, new_config.data_path, [](char c){return c == '.';});
+        boost::split(
+                results,
+                new_config.data_path, 
+                [](char c){return c == '.';});
         new_config.collection_map[results.back()] = new_config.data_path;
         auto_map(array_type.content_type(), new_config);
     }
@@ -398,7 +404,10 @@ void Mapper::auto_map(const DynamicType& topic_type, MetricConfig config) {
         //DEBUG
         std::cout << "new_config: " << new_config.data_path << endl;
         std::vector<string> results;
-        boost::split(results, new_config.data_path, [](char c){return c == '.';});
+        boost::split(
+                results,
+                new_config.data_path,
+                [](char c){return c == '.';});
         new_config.collection_map[results.back()] = new_config.data_path;
         auto_map(seq_type.content_type(), new_config);
     }
@@ -434,7 +443,7 @@ void Mapper::register_metrics(std::shared_ptr<Registry> registry) {
     add_metric adder;
     adder.labels = {{"topic", topic_name}};
     boost::apply_visitor(adder, temp);
-    family_map["call_on_data_available_total"] = temp;
+    metric_map["call_on_data_available_total"] = temp;
 
     // create and register instance_info (pseudo-metric) 
     Family_variant instance_info =
@@ -446,7 +455,7 @@ void Mapper::register_metrics(std::shared_ptr<Registry> registry) {
                     registry);
     adder.labels = {};
     boost::apply_visitor(adder, instance_info);
-    family_map["instance_info"] = instance_info;
+    metric_map["instance_info"] = instance_info;
 
     //DEBUG 
     std::cout << "config size: " << config_map.size() << endl;
@@ -459,7 +468,7 @@ void Mapper::register_metrics(std::shared_ptr<Registry> registry) {
         std::cout << "fam->name: " << fam->name << endl;
         std::cout << "fam->data_path: " << fam->data_path << endl << endl;
         temp = create_metric(fam, registry);
-        family_map[fam->name] = temp;
+        metric_map[fam->name] = temp;
     }
 }
 
@@ -469,8 +478,12 @@ void Mapper::register_metrics(std::shared_ptr<Registry> registry) {
 * Return: Family<T>* for T = Counter, Gauge, Histogram, or Summary
 * and return boost::blank if fail
 */
-Family_variant Mapper::create_metric(MetricType type, string name, string detail, 
-                       const map<string, string>& labels, std::shared_ptr<Registry> registry) {
+Family_variant Mapper::create_metric(
+        MetricType type,
+        MetricName name,
+        string detail, 
+        const Label& labels,
+        std::shared_ptr<Registry> registry) {
     switch(type){
         case MetricType::Counter:
             return &(BuildCounter().Name(name).Help(detail).Labels(labels).Register(*registry));
@@ -485,8 +498,15 @@ Family_variant Mapper::create_metric(MetricType type, string name, string detail
     }
 }
 
-Family_variant Mapper::create_metric(MetricConfig* famConfig, std::shared_ptr<Registry> registry) {
-    return create_metric(famConfig->type, famConfig->name, famConfig->help, {}, registry);
+Family_variant Mapper::create_metric(
+        MetricConfig* famConfig,
+        std::shared_ptr<Registry> registry) {
+    return create_metric(
+            famConfig->type,
+            famConfig->name,
+            famConfig->help,
+            {},
+            registry);
 }
 
 bool Mapper::is_auto_mapping() {
@@ -497,16 +517,17 @@ bool Mapper::use_key_hash_label() {
     return use_key_hash;
 }
 
-string Mapper::data_path_to_label_name(string data_path) {
+string Mapper::data_path_to_label_name(DataPath data_path) {
     string updated_name = boost::replace_all_copy(data_path, ".", "_");
     boost::replace_all(updated_name, "[", "_");
     boost::replace_all(updated_name, "]", "_");
     return updated_name;
 }
 
-void Mapper::format_key_label(map<string, string>& key_label) {
-    map<string, string> updated_label;
-    for(map<string, string>::const_iterator cit = key_label.begin(); cit != key_label.end(); cit++) {
+void Mapper::format_key_label(Label& key_label) {
+    Label updated_label;
+    for(map<string, string>::const_iterator cit = key_label.begin();
+            cit != key_label.end(); cit++) {
         string updated_name = data_path_to_label_name(cit->first);
         updated_label[updated_name] = cit->second;
     }
@@ -540,7 +561,10 @@ MetricType Mapper::what_type(std::string type) {
 *  Only work with basic data with no array or sequence
 *  Return: double 
 */
-double Mapper::get_value(const dds::core::xtypes::DynamicData& data, string data_path, TypeKind kind) {
+double Mapper::get_value(
+        const DynamicData& data,
+        DataPath data_path,
+        TypeKind kind) {
     DynamicData temp = data;
     if (kind.underlying() == TypeKind::INT_16_TYPE ) {
         return (double) temp.value<int16_t>(data_path);
@@ -591,7 +615,10 @@ bool Mapper::is_primitive_kind(TypeKind kind) {
     }
 }
 
-void Mapper::get_key_labels(std::map<string, string> &key_labels, const DynamicData& data, string data_path) {
+void Mapper::get_key_labels(
+        Label& key_labels,
+        const DynamicData& data,
+        DataPath data_path) {
     //DEBUG
     std::cout << "In get_key_labels: " << data_path << endl;
     
@@ -614,7 +641,8 @@ void Mapper::get_key_labels(std::map<string, string> &key_labels, const DynamicD
         DynamicData trav_data = data.value<DynamicData>(data_path);
         std::cout << "DynamicData Bind sucessful" << endl;
         if (trav_data.type_kind().underlying() == TypeKind::STRING_TYPE 
-                || trav_data.type_kind().underlying() == TypeKind::WSTRING_TYPE) {
+                || trav_data.type_kind().underlying() == 
+                        TypeKind::WSTRING_TYPE) {
             // DEBUG
             std::cout << "get_key_labels: string" << endl;
             string value = data.value<string>(data_path);
@@ -656,8 +684,11 @@ void Mapper::get_key_labels(std::map<string, string> &key_labels, const DynamicD
 
 // deal with array or sequence
 // TODO
-void Mapper::get_data(vector<map<string, string>>& set_labels, vector<double>& vars, 
-                const dds::core::xtypes::DynamicData& data, MetricConfig config) {
+void Mapper::get_data(
+        vector<Label>& set_labels,
+        vector<double>& vars, 
+        const DynamicData& data,
+        MetricConfig config) {
     
     // no list in path (base case)
     if (config.collection_map.empty()) {
@@ -689,7 +720,8 @@ void Mapper::get_data(vector<map<string, string>>& set_labels, vector<double>& v
         map<string, string> key_labels = {};
         // key_map for recursive 
         map<string, string> new_key_map = config.key_map;
-        for (map<string, string>::const_iterator cit = config.key_map.begin(); cit != config.key_map.end(); ++cit) {
+        for (map<string, string>::const_iterator cit = config.key_map.begin();
+                cit != config.key_map.end(); ++cit) {
             std::vector<string> path_key = {};
             string str_path_key = cit->second;
             boost::split(path_key, str_path_key, [](char c){return c == '.';});
@@ -704,49 +736,62 @@ void Mapper::get_data(vector<map<string, string>>& set_labels, vector<double>& v
                 break;
             }
         }    
-        // set_labels->push_back(key_labels);
 
         // TODO modify config
         MetricConfig new_config(config);
+        
         // only the unseen keys
         new_config.key_map = new_key_map;
+
         // adjust MetricConfig for recursive
-        for (map<string, string>::iterator it = new_config.key_map.begin(); it != new_config.key_map.end(); ++it) {
+        for (map<string, string>::iterator it = new_config.key_map.begin();
+                it != new_config.key_map.end(); ++it) {
             it->second.erase(0, str_path_list.length() + 1);
         }
+
         // recursively call on members of the first list
         new_config.collection_map.erase(config.collection_map.begin()->first);
-        for (map<string, string>::iterator it = new_config.collection_map.begin(); it != new_config.collection_map.end(); ++it) {
+        for (map<string, string>::iterator it = new_config.collection_map.begin();
+                it != new_config.collection_map.end(); ++it) {
             it->second.erase(0, str_path_list.length() + 1);
         }
         new_config.data_path.erase(0, str_path_list.length() + 1);
+
         // Traverse to list
         DynamicData temp = data;
         try {
+
             // traverse to the array or sequence parent
             for (int i = 0; i < path_list.size() - 1; ++i) {
                 if (temp.member_exists(path_list[i])) {
                     temp = temp.value<DynamicData>(path_list[i]);
                 } else {
-                    // DEBUG 
-                    std::cout << path_list[i] << " member does not exist." << endl;
                     set_labels.clear();
                     vars.clear();
                 }
             }
             string name_list = path_list[path_list.size()-1];
-            //vector<DynamicData> vec = temp.get_values<DynamicData>(name_list);
-            rti::core::xtypes::LoanedDynamicData vec = temp.loan_value(name_list);
+            rti::core::xtypes::LoanedDynamicData vec =
+                    temp.loan_value(name_list);
             name_list.append("_index");
+
             // recursice on all element in the list
             for (size_t i = 1; i <= vec.get().member_count(); ++i) {
+
                 // assume vector can contain multiple empty maps
                 vector<map<string, string>> recur_set_labels = {};
                 vector<double> recur_vars = {};
-                get_data(recur_set_labels, recur_vars, vec.get().loan_value(i).get(), new_config);
+                get_data(
+                        recur_set_labels,
+                        recur_vars,
+                        vec.get().loan_value(i).get(),
+                        new_config);
+
                 // append parent key labels to the each child labels
                 for (int j = 0; j < recur_set_labels.size(); ++j) {
-                    recur_set_labels[j].insert(key_labels.begin(), key_labels.end());
+                    recur_set_labels[j].insert(
+                            key_labels.begin(),
+                            key_labels.end());
                     recur_set_labels[j][name_list] = to_string(i);
                 }
                 // DEBUG
@@ -754,7 +799,10 @@ void Mapper::get_data(vector<map<string, string>>& set_labels, vector<double>& v
                     cout << "labels not match values. ABORT!" << endl;
                     throw new dds::core::Error("labels not match values");
                 }
-                set_labels.insert(set_labels.end(), recur_set_labels.begin(), recur_set_labels.end());
+                set_labels.insert(
+                        set_labels.end(),
+                        recur_set_labels.begin(),
+                        recur_set_labels.end());
                 vars.insert(vars.end(), recur_vars.begin(), recur_vars.end());
             }
 
@@ -768,11 +816,11 @@ void Mapper::get_data(vector<map<string, string>>& set_labels, vector<double>& v
 // labels we need:
 //  {keyed_member_name, string_rep} for members of keyed struct
 //  {index, ...} for members that is array or sequnce type
-// 
 int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data, 
                            const dds::sub::SampleInfo& info) {
     Family<Counter>* counter_fam = 
-        boost::get<Family<Counter>*>(family_map["call_on_data_available_total"]);
+            boost::get<Family<Counter>*>(
+                    metric_map["call_on_data_available_total"]);
     Counter& counter = counter_fam->Add({{"Topic", topic_name}});
     counter.Increment();
 
@@ -794,10 +842,11 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
             format_key_label(key_labels);
             updater.labels = key_labels;
         }
-        boost::apply_visitor(updater, family_map["instance_info"]);
+        boost::apply_visitor(updater, metric_map["instance_info"]);
     }
 
-    for (map<string, MetricConfig*>::const_iterator cit = config_map.begin(); cit != config_map.end(); ++cit) {
+    for (map<string, MetricConfig*>::const_iterator cit = config_map.begin();
+            cit != config_map.end(); ++cit) {
         //DEBUG 
         std::cout << "metric to be updated: " << cit->first << endl;
         vector<map<string,string>> labels_list = {};
@@ -830,22 +879,25 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
         update_metric updater;
         for (int i = 0; i < vars.size(); ++i) {
             updater.value = vars[i];
-            if (labels_list[i].empty()) {
+            if (labels_list[i].empty() || use_key_hash_label()) {
                 // DEBUG
                 std::cout << "update_metric no key" << endl;
                 std::cout << "metric name " << cit->first << endl;
                 std::stringstream ss;
                 ss << info.instance_handle();
-                updater.labels = {{"Instance_ID", ss.str()}} ;
-                boost::apply_visitor(updater, family_map[cit->first]);
+                updater.labels = labels_list[i]; 
+                updater.labels["Key_hash"] = ss.str();
+                boost::apply_visitor(updater, metric_map[cit->first]);
             } else {
                 // DEBUG
                 std::cout << "update_metric with key labels" << endl;
                 std::cout << "metric name " << cit->first << endl;
                 map<string, string> label_update;
-                for(map<string, string>::const_iterator cit = labels_list[i].begin(); cit != labels_list[i].end(); cit++) {
+                for(map<string, string>::const_iterator cit = labels_list[i].begin();
+                        cit != labels_list[i].end(); cit++) {
                     std::cout << cit->first <<", "<< cit->second << endl;
-                    string updated_name = boost::replace_all_copy(cit->first, ".", "_");
+                    string updated_name = 
+                            boost::replace_all_copy(cit->first, ".", "_");
                     boost::replace_all(updated_name, "[", "_");
                     boost::replace_all(updated_name, "]", "_");
                     // DEBUG
@@ -853,20 +905,18 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
                     label_update[updated_name] = cit->second;
                 } 
                 updater.labels = label_update;
-                boost::apply_visitor(updater, family_map[cit->first]);
+                boost::apply_visitor(updater, metric_map[cit->first]);
             }
-            // Debug 
-            std::cout << "Finish update value " << i << " of " << cit->first << endl;
         }
         std::cout << "Finsish with: " << cit->first << endl << endl << endl;
     }
 
     return 1;
 }
-//--- end Mapper -----------------------------------------------------------------------------------------------------
-//--------------------------------------------------------------------------------------------------------------------
+//--- end Mapper ---------------------------------------------------------------
+//------------------------------------------------------------------------------
 
-//--- add_metric -----------------------------------------------------------------------------------------------------
+//--- add_metric ---------------------------------------------------------------
 bool add_metric::operator()( Family<prometheus::Counter>* operand) const {
     try {
         operand->Add(labels);
@@ -885,7 +935,8 @@ bool add_metric::operator()( Family<prometheus::Gauge>* operand) const {
 }
 bool add_metric::operator()( Family<prometheus::Summary>* operand) const {
     try {
-        auto quantile = Summary::Quantiles{{0.5, 0.05}, {0.7, 0.03}, {0.90, 0.01}};
+        auto quantile =
+                Summary::Quantiles{{0.5, 0.05}, {0.7, 0.03}, {0.90, 0.01}};
         operand->Add(labels, quantile);
         return true;
     } catch(const std::exception& e) {
@@ -901,7 +952,7 @@ bool add_metric::operator()( Family<prometheus::Histogram>* operand) const {
     }
 }
 
-//--- Update_metric ----------------------------------------------------------------------------
+//--- Update_metric ------------------------------------------------------------
 bool update_metric::operator()( Family<prometheus::Counter>* operand) const {
     try {
         prometheus::Counter& counter = operand->Add(labels);
@@ -923,7 +974,8 @@ bool update_metric::operator()( Family<prometheus::Gauge>* operand) const {
 }
 bool update_metric::operator()( Family<prometheus::Summary>* operand) const {
     try {
-        auto quantile = Summary::Quantiles{{0.5, 0.05}, {0.7, 0.03}, {0.90, 0.01}};
+        auto quantile =
+                Summary::Quantiles{{0.5, 0.05}, {0.7, 0.03}, {0.90, 0.01}};
         operand->Add(labels, quantile);
         return true;
     } catch(const std::exception& e) {
