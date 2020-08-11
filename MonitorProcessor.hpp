@@ -45,6 +45,8 @@ using namespace prometheus;
 
 class MonitorExposer : public rti::routing::processor::NoOpProcessor {
 public:
+    void on_periodic_action(rti::routing::processor::Route &) override;	
+
     void on_data_available(rti::routing::processor::Route &) override;
 
     void on_input_enabled(

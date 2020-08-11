@@ -1,0 +1,13 @@
+instance_info: 
+  - object_guid
+ignore:
+  - owner_guid
+enable_auto_map: true
+use_key_hash_label: true
+# metrics:
+#   - # name: "domainParticipant_process_statistics" optional
+#     # type: "Gauge" optional
+#     data_path: process.user_cpu_time.sec
+#     description: "Tell cpu time"
+#   - data_path: process.kernel_cpu_time.sec
+#     description: "Tell kernel_cpu_time"

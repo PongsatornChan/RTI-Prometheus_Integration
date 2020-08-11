@@ -294,7 +294,8 @@ void Mapper::auto_map(const DynamicType& topic_type, MetricConfig config) {
     }
     //DEBUG
     std::cout << "ignore_list: not in the list." << endl;
-    
+
+    string statistic_variable = "StatisticVariable";
     if (is_primitive_type(topic_type)) {
         TypeKind kind = topic_type.kind();
         if (kind.underlying() == TypeKind::BOOLEAN_TYPE 
@@ -310,11 +311,10 @@ void Mapper::auto_map(const DynamicType& topic_type, MetricConfig config) {
         config_map[save_config->name] = save_config;
         return;
     // statisticVaraible direct alias to mean of StatisticMetric
-    } else if (topic_type.name().compare("StatisticVariable") == 0) {
+    } else if (topic_type.name().find(statistic_variable) != std::string::npos) {
         config.data_path.append("publication_period_metrics.mean");
+        config.name.append("publication_period_metrics_mean");
         MetricConfig* save_config = new MetricConfig(config);
-        save_config->data_path.erase(save_config->data_path.length()-1, 1);
-        save_config->name.erase(save_config->name.length()-1, 1);
         config_map[config.name] = save_config;
         //DEBUG
         std::cout << "StatisticVariable is found." << endl;
@@ -695,7 +695,7 @@ void Mapper::get_data(
         // labels
         map<string, string> key_labels;
         for (map<string, string>::const_iterator cit = config.key_map.begin();
-        cit != config.key_map.end(); ++cit) {
+                cit != config.key_map.end(); ++cit) {
             
             // DEBUG
             std::cout << "get_data: before get_key_labels" << endl;
@@ -725,7 +725,7 @@ void Mapper::get_data(
             std::vector<string> path_key = {};
             string str_path_key = cit->second;
             boost::split(path_key, str_path_key, [](char c){return c == '.';});
-            // key before before list 
+            // key before list 
             // key after list depend on what element of list
             if (path_key.size() < path_list.size()) {
                 map<string, string> key_labels;
@@ -751,7 +751,8 @@ void Mapper::get_data(
 
         // recursively call on members of the first list
         new_config.collection_map.erase(config.collection_map.begin()->first);
-        for (map<string, string>::iterator it = new_config.collection_map.begin();
+        for (map<string, string>::iterator it =
+                new_config.collection_map.begin();
                 it != new_config.collection_map.end(); ++it) {
             it->second.erase(0, str_path_list.length() + 1);
         }
@@ -861,7 +862,8 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
             for (int i=0;i<vars.size();++i) {cout<<vars[i];} 
             cout << endl;
         } catch(std::exception& e) {
-            std::cout << "get_data error: set to 0" << endl; 
+            std::cout << "get_data error: " << e.what() << endl;
+            continue; 
             vars.push_back(0.0);
         } catch(...) {
             std::cout << "get_data throw unexpected exception" << endl;
@@ -908,7 +910,7 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
                 boost::apply_visitor(updater, metric_map[cit->first]);
             }
         }
-        std::cout << "Finsish with: " << cit->first << endl << endl << endl;
+        std::cout << "Finish with: " << cit->first << endl << endl << endl;
     }
 
     return 1;

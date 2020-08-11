@@ -60,8 +60,7 @@ MonitorExposer::MonitorExposer(
         std::shared_ptr<prometheus::Registry> input_registry) : 
     mapper (Mapper(input_filename)),
     exposer (input_exposer),
-    registry (input_registry)
-{
+    registry (input_registry) {
         filename = input_filename;
         std::cout << "MonitorExposer(Processor) is created" << '\n';
         std::cout << "with mapping filename: " << filename << '\n'; 
@@ -74,8 +73,7 @@ MonitorExposer::~MonitorExposer()
 
 void MonitorExposer::on_input_enabled(
         rti::routing::processor::Route &route,
-        rti::routing::processor::Input &input)
-{
+        rti::routing::processor::Input &input) {
     // The type this processor works with is the ShapeType, which shall
     // be the type the input as well as the two outputs. Hence we can use
     // the input type to initialize the output data buffer
@@ -97,17 +95,17 @@ void MonitorExposer::on_input_enabled(
         std::cout << "Before auto_map" << endl;
         mapper.auto_map(*topic_type, metric_config);
         //DEBUG
-        std::cout << "Auto_map success" << endl;
+        std::cout << "Auto_map success" << endl << endl;
     } 
     std::cout << "register metrics...." << endl;
     mapper.register_metrics(registry);
-    std::cout << "register completed!" << endl << endl;
+    std::cout << "register completed!" << endl;
     exposer.RegisterCollectable(registry);
+    std::cout << "on_input_enable done" << endl << endl;;
 }
 
-void MonitorExposer::on_data_available(rti::routing::processor::Route &route)
-{
-    std::cout << "MonitorExposer::on_data_available is called." << '\n';
+void MonitorExposer::on_data_available(rti::routing::processor::Route &route) {
+    std::cout << "MonitorExposer::on_data_available is called." << endl;
 
     // Split input shapes  into mono-dimensional output shapes
     auto input_samples = route.input<DynamicData>(0).take();
@@ -125,6 +123,9 @@ void MonitorExposer::on_data_available(rti::routing::processor::Route &route)
     std::cout << "____________________________________" << '\n';
 }
 
+void MonitorExposer::on_periodic_action(rti::routing::processor::Route &route) {
+    std::cout << "on_periodic_action is called." << endl;
+}
 /*
  * --- MonitorProcessorPlugin --------------------------------------------------
  * user can provide HTTP Address for exposer to use or 
@@ -137,15 +138,13 @@ MonitorProcessorPlugin::MonitorProcessorPlugin(
         const rti::routing::PropertySet &properties) :
                 exposer {(properties.find("exposer") != properties.end() ?
                     properties.find("exposer")->second: DEFAULT_ADDRESS), 1},
-                registry (std::make_shared<Registry>())
-{       
+                registry (std::make_shared<Registry>()) {       
 }
 
 
 rti::routing::processor::Processor *MonitorProcessorPlugin::create_processor(
         rti::routing::processor::Route &,
-        const rti::routing::PropertySet &properties)
-{
+        const rti::routing::PropertySet &properties) {
     const std::string property_name = "mapping"; 
     std::string filename = properties.find(property_name)->second;
     return new MonitorExposer(filename, exposer, registry);
@@ -153,8 +152,7 @@ rti::routing::processor::Processor *MonitorProcessorPlugin::create_processor(
 
 void MonitorProcessorPlugin::delete_processor(
         rti::routing::processor::Route &,
-        rti::routing::processor::Processor *processor)
-{
+        rti::routing::processor::Processor *processor) {
     delete processor;
 }
 

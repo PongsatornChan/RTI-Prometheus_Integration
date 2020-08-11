@@ -40,7 +40,7 @@
         </processor_plugin>
     </plugin_library>
     
-    <routing_service name="MonitoringTopicExposer">
+    <routing_service name="PeriodicTopicExposer">
 
         <annotation>
             <documentation>
@@ -49,9 +49,9 @@
             </documentation>
         </annotation>
 
-        <monitoring>
-            <enabled>false</enabled>
-        </monitoring>
+        <administration>
+            <domain_id>0</domain_id>
+        </administration>
 
         <domain_route>
             
@@ -64,7 +64,7 @@
             </participant>
 
             <session>
-                <!-- ShapesDemo -->
+
                 <!-- <topic_route name="MonitoringTopicToMetric">
                     <processor plugin_name="MonitorPluginLib::MonitorProcessor">
                         <property>
@@ -84,7 +84,6 @@
                     </input> 
                 </topic_route> -->
 
-                <!-- Rounting Service Monitoring Topic: Periodic -->
                 <topic_route name="MonitoringTopicToMetric_2">
                     <processor plugin_name="MonitorPluginLib::MonitorProcessor">
                         <property>
