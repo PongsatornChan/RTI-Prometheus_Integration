@@ -592,7 +592,9 @@ double Mapper::get_value(
 }
 
 bool Mapper::is_primitive_kind(TypeKind kind) {
-    if (kind.underlying() == TypeKind::INT_16_TYPE ) {
+    if (kind.underlying() == TypeKind::UINT_8_TYPE) {
+        return true;
+    } else if (kind.underlying() == TypeKind::INT_16_TYPE) {
         return true;
     } else if (kind.underlying() == TypeKind::UINT_16_TYPE) {
         return true;
@@ -610,6 +612,8 @@ bool Mapper::is_primitive_kind(TypeKind kind) {
         return true;
     } else if (kind.underlying() == TypeKind::FLOAT_128_TYPE) {
         return true;
+    } else if (kind.underlying() == TypeKind::CHAR_8_TYPE) {
+        return true;
     } else {
         return false;
     }
@@ -625,7 +629,7 @@ void Mapper::get_key_labels(
     try 
     {
         TypeKind kind = data.member_info(data_path).member_kind();
-        std::cout << "get info ok" << endl;
+        std::cout << "get info ok: " << kind.underlying() << endl;
         if (is_primitive_kind(kind)) {
             // DEBUG
             std::cout << "get_key_labels: primitive" << endl;
@@ -636,7 +640,15 @@ void Mapper::get_key_labels(
             key_labels[data_path] = str_rep;
             std::cout << "finish insert" << endl;
             return;
-        }
+        
+        /*16386 is octet type, I could not find TypeKind that represent octet
+        * in the Modern C++ document. 
+        * However, I doubt that this will be the same for all platform
+        */
+        } 
+        // else if (kind.underlying() == 16386) {
+            
+        // }
 
         DynamicData trav_data = data.value<DynamicData>(data_path);
         std::cout << "DynamicData Bind sucessful" << endl;
@@ -862,8 +874,11 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
             for (int i=0;i<vars.size();++i) {cout<<vars[i];} 
             cout << endl;
         } catch(std::exception& e) {
-            std::cout << "get_data error: " << e.what() << endl;
-            continue; 
+            string error_msg(e.what());
+            if (error_msg.find("member doesn't exist") != std::string::npos) {
+                continue;
+            }
+            std::cout << "get_data error: " << e.what() << endl; 
             vars.push_back(0.0);
         } catch(...) {
             std::cout << "get_data throw unexpected exception" << endl;
@@ -888,7 +903,7 @@ int Mapper::update_metrics(const dds::core::xtypes::DynamicData& data,
                 std::stringstream ss;
                 ss << info.instance_handle();
                 updater.labels = labels_list[i]; 
-                updater.labels["Key_hash"] = ss.str();
+                updater.labels["key"] = ss.str();
                 boost::apply_visitor(updater, metric_map[cit->first]);
             } else {
                 // DEBUG
